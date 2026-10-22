@@ -1,6 +1,6 @@
 # Project Context & Architecture Guide (`agy-gemini-notebook-plugin`)
 
-> **Note for Antigravity 2 Agents:** This repository is an open-source **Antigravity 2 Plugin** designed to bridge **Gemini Notebooks (NotebookLM & NotebookLM Enterprise)** with Antigravity 2 conversations and workspaces.
+> **Note for Antigravity 2 Agents:** This repository is an open-source **Antigravity 2 Plugin** (**Gemini Notebook by Chryzalide**) designed to bridge **Gemini Notebooks (NotebookLM & NotebookLM Enterprise)** with Antigravity 2 conversations and workspaces.
 
 ---
 
@@ -11,7 +11,7 @@ In the consumer **Gemini Web** app, users can attach a **Gemini Notebook (Notebo
 This open-source plugin brings **first-class Gemini Notebook integration** to Antigravity 2 by combining:
 1. **An MCP Server (`gemini_notebook_mcp`)** exposing tools to list, create, attach, sync workspace files into, and query Gemini Notebooks.
 2. **An Antigravity 2 Skill (`skills/gemini-notebook/SKILL.md`) & Rule (`rules/AGENTS.md`)** so the agent knows how to automatically ground its answers in the workspace's active notebook (`.agents/notebook.json`).
-3. **An Antigravity 2 Sidecar UI (`sidecars/notebook_context_panel/`)** in the Auxiliary Pane (`SIDECAR_UI_ENTRYPOINT_AUX_PANE`) allowing 1-click selection of active notebooks and source toggles (`sidecar://gemini-notebook/notebook_context_panel`).
+3. **An Antigravity 2 Sidecar UI (`sidecars/notebook_context_panel/`)** in the Auxiliary Pane (`SIDECAR_UI_ENTRYPOINT_AUX_PANE`) allowing 1-click selection of active notebooks and source toggles (`sidecar://gemini-notebook/notebook_context_panel/ui.html`).
 
 ---
 
@@ -58,8 +58,11 @@ agy-gemini-notebook-plugin/
 ├── README.md                        # Public open-source documentation
 ├── LICENSE                          # MIT License
 ├── pyproject.toml                   # Python package & MCP server entrypoint
-├── plugin.json                      # Antigravity 2 plugin manifest
+├── plugin.json                      # Antigravity 2 plugin manifest ("Gemini Notebook by Chryzalide")
 ├── mcp_config.json                  # Antigravity 2 MCP server registration
+├── scripts/
+│   ├── setup.sh                     # Automated 5-step installation & auth setup workflow
+│   └── run_mcp.sh                   # Portable MCP server launcher
 ├── rules/
 │   └── AGENTS.md                    # Active rule injected when plugin is enabled
 ├── skills/
@@ -73,6 +76,7 @@ agy-gemini-notebook-plugin/
 └── src/
     └── agy_gemini_notebook/
         ├── __init__.py
+        ├── cli.py                   # Standalone CLI (setup, status, login, invoke, create, etc.)
         ├── config.py                # Env vars & .agents/notebook.json workspace binding
         ├── mcp_server.py            # FastMCP server exposing all notebook tools
         └── engines/
@@ -103,7 +107,7 @@ Author: **Souryan Augé** (`https://souryan-auge.fr/`)
 - **`staging`**: Pre-production branch dedicated to real-world integration and E2E testing (`origin/staging`).
 - **`main`**: Stable production branch (`origin/main`).
 - **Mandatory Versioning & Changelog in `README.md`**:
-  - Current release baseline: **`v1.0.1`** (`1.0.1` in `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+  - Current release baseline: **`v1.0.2`** (`1.0.2` in `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
   - **Every change made to this repository MUST be versioned, documented, explained (why & how), and recorded in the `## 📦 Versioning & Changelog` section of `README.md`.**
 - **100% English Codebase & Docs**: Even when conversing with the user in French, all files in the repository (code, comments, docstrings, UI, `README.md`, `SKILL.md`, commit messages) MUST be written **100% in English**.
 - **Zero Local Path Leaks**: Never commit local machine filesystem paths, usernames, mount points, or private environment details to any tracked file in this public repository.

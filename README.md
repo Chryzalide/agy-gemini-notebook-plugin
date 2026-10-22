@@ -1,13 +1,13 @@
-# 📓 agy-gemini-notebook-plugin
+# 📓 Gemini Notebook by Chryzalide (`agy-gemini-notebook-plugin`)
 
-![Version](https://img.shields.io/badge/version-v1.0.1-blue)
+![Version](https://img.shields.io/badge/version-v1.0.2-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
 
 **Invoke and pilot Gemini Notebooks (NotebookLM & NotebookLM Enterprise) from Google Antigravity 2, VS Code, Cursor, Claude Code, and the CLI.**
 
-In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a conversation for grounded, source-backed context. **`agy-gemini-notebook-plugin`** brings first-class Gemini Notebook integration—plus **autonomous notebook piloting, Fast & Deep Research, and Studio Artifact generation**—directly into **Google Antigravity 2**, **VS Code**, and any MCP-compatible agent harness.
+In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a conversation for grounded, source-backed context. **`Gemini Notebook by Chryzalide`** (`agy-gemini-notebook-plugin`) is an independent, open-source community plugin that brings first-class Gemini Notebook integration—plus **autonomous notebook piloting, Fast & Deep Research, and Studio Artifact generation**—directly into **Google Antigravity 2**, **VS Code**, and any MCP-compatible agent harness.
 
 ---
 
@@ -26,9 +26,9 @@ In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a 
 - 💬 **Engine 2 — Full RPC Bridge (`notebooklm-py` for Consumer & Enterprise)**:
   - Automatic Dual-Engine fallback when `GCP_PROJECT_NUMBER` is not set—giving personal Google accounts (`notebooklm.google.com`) full CRUD, file uploads, source search, grounded Q&A with inline citations, Deep Research, Notes, and Studio Artifacts (Audio Overviews, Briefing Docs, Study Guides, Mind Maps, Quizzes, Flashcards, Slide Decks).
 - 🖥️ **Multi-Environment Ready (Antigravity 2 + VS Code + Cursor + CLI)**:
-  - **Antigravity 2 Plugin**: Native MCP Server + Skill + Grounding Rule + Auxiliary Pane Sidecar UI.
+  - **Antigravity 2 Plugin**: Native MCP Server + Skill + Grounding Rule + Auxiliary Pane Sidecar UI (**Gemini Notebook by Chryzalide**).
   - **VS Code / Cursor / Claude Code**: Portable `scripts/run_mcp.sh` wrapper + MCP Resources (`notebook://active`) & Prompts (`invoke_notebook`, `deep_research_notebook`) + `--transport stdio|sse|streamable-http`.
-  - **Standalone CLI (`agy-gemini-notebook`)**: Invoke, query, sync files, and launch Deep Research from any terminal or agent bash tool.
+  - **Standalone CLI (`agy-gemini-notebook`)**: Setup, authenticate, invoke, query, sync files, and launch Deep Research from any terminal or agent bash tool.
 
 ---
 
@@ -82,7 +82,7 @@ flowchart LR
         CLI["agy-gemini-notebook CLI"]
     end
 
-    subgraph Server["agy-gemini-notebook-plugin"]
+    subgraph Server["Gemini Notebook by Chryzalide"]
         MCP["FastMCP / MCPServer (21 Tools + Resources + Prompts)"]
     end
 
@@ -103,47 +103,90 @@ flowchart LR
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Installation & Setup Workflow
 
-### 1. Clone and install dependencies
+To make installation and first-time onboarding effortless, **Gemini Notebook by Chryzalide** ships with a **5-step Setup Workflow** (`./scripts/setup.sh` and `agy-gemini-notebook setup`).
+
+```mermaid
+flowchart LR
+    S1["1. Clone & Python .venv"] --> S2["2. Playwright Chromium Check"]
+    S2 --> S3["3. Register Plugin in Antigravity 2"]
+    S3 --> S4["4. Authenticate (Google Sign-In or gcloud)"]
+    S4 --> S5["5. Reload IDE & Attach Notebook"]
+```
+
+### Option 1: Automated 1-Command Setup *(Recommended)*
+
+Clone the repository and run `./scripts/setup.sh`:
 
 ```bash
 git clone https://github.com/Chryzalide/agy-gemini-notebook-plugin.git
 cd agy-gemini-notebook-plugin
-uv sync --all-extras
+./scripts/setup.sh --login
 ```
 
-### 2. Configure Authentication
+What `./scripts/setup.sh` does automatically:
+1. **[Step 1/5] Python Environment & Dependencies**: Creates `.venv` (via `uv` or `python3 -m venv`) and installs `agy-gemini-notebook-plugin[rpc,dev]`.
+2. **[Step 2/5] Browser Engine Verification**: Detects any existing Playwright Chromium binary in `~/.cache/ms-playwright` (or installs Chromium if needed) for interactive Google sign-in.
+3. **[Step 3/5] Antigravity 2 Plugin Registration**: Creates `~/.gemini/config/plugins/gemini-notebook` and enables **Gemini Notebook by Chryzalide** via the Antigravity 2 Language Server if running.
+4. **[Step 4/5] Interactive Authentication**:
+   - **Personal / Workspace Google Account (`notebooklm.google.com` — Engine 2)**: Opens a Chromium window so you can sign in to Google NotebookLM and saves your session state.
+   - **Google Cloud NotebookLM Enterprise (`v1alpha` REST — Engine 1)**: Checks `GCP_PROJECT_NUMBER` and `gcloud auth login`.
+5. **[Step 5/5] Health Verification**: Runs `agy-gemini-notebook status` to confirm `setup_ready: true`.
 
-#### Option A: Personal Google Account (`notebooklm.google.com` — Engine 2)
-Authenticate your `notebooklm-py` session once (via CLI, MCP tool `notebook_login`, or the Sidecar UI button):
-
-```bash
-.venv/bin/agy-gemini-notebook login
-```
-
-#### Option B: NotebookLM Enterprise (Official Google Cloud `v1alpha` API — Engine 1)
-Set your Google Cloud environment variables and authenticate via `gcloud`:
-
-```bash
-export GCP_PROJECT_NUMBER="123456789012"
-export GCP_LOCATION="global"          # global, us, or eu
-export GCP_ENDPOINT_LOCATION="global" # global, us, or eu
-
-gcloud auth login
-```
+> [!IMPORTANT]
+> **Reload Antigravity 2 Once After Initial Installation**: When a new plugin or sidecar is added to `~/.gemini/config/plugins/`, reload or restart **Antigravity 2** once so the IDE starts the **Gemini Notebook by Chryzalide** Sidecar HTTP server and MCP server.
 
 ---
 
-## 🔌 IDE & Agent Harness Setup
+### Option 2: Step-by-Step Manual Setup Checklist
 
-### Google Antigravity 2
-Symlink the repository into your Antigravity 2 plugins directory:
+If you prefer to execute each setup action manually:
 
-```bash
-mkdir -p ~/.gemini/config/plugins
-ln -s /path/to/agy-gemini-notebook-plugin ~/.gemini/config/plugins/gemini-notebook
-```
+1. **Install the Python environment**:
+   ```bash
+   uv sync --all-extras
+   ```
+2. **Register the plugin in Google Antigravity 2**:
+   ```bash
+   mkdir -p ~/.gemini/config/plugins
+   ln -s "$(pwd)" ~/.gemini/config/plugins/gemini-notebook
+   ```
+3. **Authenticate your preferred engine**:
+   - **Engine 2 (Personal / Workspace Google Account — `notebooklm.google.com`)**:
+     ```bash
+     .venv/bin/agy-gemini-notebook login
+     ```
+   - **Engine 1 (Google Cloud NotebookLM Enterprise — `v1alpha` REST API)**:
+     ```bash
+     export GCP_PROJECT_NUMBER="123456789012"
+     export GCP_LOCATION="global"          # global, us, or eu
+     export GCP_ENDPOINT_LOCATION="global" # global, us, or eu
+     gcloud auth login
+     ```
+4. **Verify readiness**:
+   ```bash
+   .venv/bin/agy-gemini-notebook status
+   ```
+5. **Reload Antigravity 2 and open the Sidecar UI**:
+   - Open **`Overview -> Plugins -> Gemini Notebook by Chryzalide`** in the top-right auxiliary pane menu, or click `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` in chat.
+
+---
+
+### Option 3: In-IDE Agent-Guided Setup Workflow
+
+Once the plugin is linked and Antigravity 2 is reloaded, you can simply ask the agent in chat:
+> *"Run the Gemini Notebook setup and authentication workflow for this workspace"*
+
+The agent will automatically:
+1. Call `notebook_status` to inspect your environment.
+2. Call `notebook_login` (opening the Google sign-in browser window) if `setup_ready` is `false`.
+3. List your notebooks (`notebook_list`) or create a new one (`notebook_create`) and bind it to `.agents/notebook.json`.
+4. Surface the clickable `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` sidecar pill link.
+
+---
+
+## 🔌 Multi-IDE & CLI Usage
 
 ### VS Code (GitHub Copilot MCP / Cline / Roo Code) & Cursor
 Add the server to your workspace `.vscode/mcp.json` (or `.cursor/mcp.json`):
@@ -166,6 +209,9 @@ Add the server to your workspace `.vscode/mcp.json` (or `.cursor/mcp.json`):
 Use the CLI from any terminal or agent shell tool:
 
 ```bash
+# Run the guided setup & health check workflow
+agy-gemini-notebook setup --login
+
 # Check engine auth and active workspace binding
 agy-gemini-notebook status
 
@@ -189,7 +235,7 @@ agy-gemini-notebook sync README.md docs/architecture.md
 
 | Category | MCP Tool | Engine | Description |
 | :--- | :--- | :--- | :--- |
-| **Workspace & Invocation** | `notebook_status` | Local + Dual | Show active `.agents/notebook.json` binding and engine auth readiness |
+| **Workspace & Invocation** | `notebook_status` | Local + Dual | Show active `.agents/notebook.json` binding, `setup_ready`, and engine auth readiness |
 | | `notebook_login` | Engine 2 (RPC) | Launch an interactive Chromium browser to authenticate with Google NotebookLM and save session state |
 | | `notebook_attach` | Local | Attach a default notebook (or register an `--alias`) to the workspace |
 | | `notebook_invoke` | Dual | Resolve a notebook by ID, alias, or fuzzy title, inspect sources, and optionally run a grounded query |
@@ -216,6 +262,17 @@ agy-gemini-notebook sync README.md docs/architecture.md
 ## 📦 Versioning & Changelog
 
 This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0.2` (2026-10-22) — Rebranding to "Gemini Notebook by Chryzalide", Antigravity 2 Sidecar SDK Protocol Fix & Automated 5-Step Setup Workflow
+
+- **Rebranding to `Gemini Notebook by Chryzalide` (`plugin.json`, `sidecars/notebook_context_panel/sidecar.json`, `ui.html`, `README.md`)**:
+  - **Why**: Using the bare name `"Gemini Notebook"` in the Antigravity 2 `Overview -> Plugins` menu and plugin manifest could cause ambiguity with official first-party Google plugins or branding.
+  - **How**: Renamed `displayName` in `plugin.json` and `display_name` / `ui_config.views[0].title` in `sidecars/notebook_context_panel/sidecar.json` and `ui.html` to **`Gemini Notebook by Chryzalide`**.
+- **Antigravity 2 Sidecar SDK Protocol Compliance (`sidecars/notebook_context_panel/server.py`, `sidecar.json`, `ui.html`)**:
+  - **Why**: Clicking the plugin inside `Overview -> Plugins` or clicking the sidecar pill link did nothing for three reasons: (1) Antigravity 2 assigns a dynamic port to sidecars via `ANTIGRAVITY_SIDECAR_WEB_PORT`, whereas `server.py` only checked `PORT` (defaulting to `8765`), (2) Antigravity 2 expects the sidecar to write `server_info.json` (`host`, `port`, `token`, `pid`) into `ANTIGRAVITY_EXECUTABLE_DATA_DIR` / `~/.gemini/antigravity/sidecar_data/.../data/server_info.json` and serve `/preload.js`, and (3) the sidecar pill link was missing `/ui.html` (`sidecar://gemini-notebook/notebook_context_panel/ui.html`).
+  - **How**: Updated `server.py` to bind `ANTIGRAVITY_SIDECAR_WEB_PORT` (falling back to `PORT` or `8000`), write and clean up `server_info.json`, serve `/preload.js` and `/shell.css`, support `X-Sidecar-Token` CORS/query injection, and use `"command": "python3", "args": ["server.py"]` in `sidecar.json`. Updated all sidecar pill links to `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)`.
+- **Automated 5-Step Setup & Onboarding Workflow (`scripts/setup.sh`, `src/agy_gemini_notebook/cli.py`, `skills/gemini-notebook/SKILL.md`, `README.md`)**:
+  - **Why & How**: Added `./scripts/setup.sh` and `agy-gemini-notebook setup [--login]` plus `Workflow 0` in `SKILL.md` and a complete visual **Installation & Setup Workflow** guide in `README.md` to walk users through environment creation, Playwright Chromium verification, Antigravity 2 plugin registration, Engine 1/2 authentication, and IDE reload verification.
 
 ### `v1.0.1` (2026-10-22) — Interactive Authentication, Graceful Auth Diagnostics & Cross-Workspace Plugin Launchers
 

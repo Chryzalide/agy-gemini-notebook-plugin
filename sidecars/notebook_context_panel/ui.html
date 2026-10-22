@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gemini Notebook Context</title>
+  <title>Gemini Notebook by Chryzalide</title>
+  <script src="/preload.js"></script>
   <style>
     :root {
       color-scheme: dark light;
@@ -479,8 +480,8 @@
 <body>
   <div class="header">
     <div class="header-title">
-      <h1>📓 Gemini Notebook</h1>
-      <span id="active-engine-badge" class="badge">Dual-Engine v0.1</span>
+      <h1>📓 Gemini Notebook by Chryzalide</h1>
+      <span id="active-engine-badge" class="badge">Dual-Engine v1.0.2</span>
     </div>
     <div class="header-actions">
       <button id="refresh-btn" class="icon-btn" type="button" title="Refresh status and notebooks">
@@ -643,10 +644,34 @@
       els.toast.className = `status-toast visible ${variant}`;
     }
 
+    window.__sidecarReady = true;
+
     async function fetchJson(url, options = {}) {
-      const resp = await fetch(url, {
-        headers: { "Content-Type": "application/json" },
+      const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+      let targetUrl = url;
+      try {
+        const parsed = new URL(url, window.location.href);
+        const searchParams = new URLSearchParams(window.location.search);
+        const token = searchParams.get("token");
+        const convId = searchParams.get("conversationId");
+        if (token) {
+          parsed.searchParams.set("token", token);
+          headers["X-Sidecar-Token"] = token;
+        }
+        if (convId && !parsed.searchParams.has("conversationId")) {
+          parsed.searchParams.set("conversationId", convId);
+        }
+        targetUrl = parsed.pathname + parsed.search;
+      } catch (_err) {
+        targetUrl = url;
+      }
+      const fetchImpl =
+        window.sidecar && typeof window.sidecar.fetch === "function"
+          ? window.sidecar.fetch.bind(window.sidecar)
+          : window.fetch.bind(window);
+      const resp = await fetchImpl(targetUrl, {
         ...options,
+        headers,
       });
       const data = await resp.json();
       if (!resp.ok || data.status === "error") {

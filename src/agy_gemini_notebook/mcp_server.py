@@ -45,6 +45,9 @@ mcp = FastMCP(
 )
 
 
+SIDECAR_URI = "sidecar://gemini-notebook/notebook_context_panel/ui.html"
+
+
 def _auth_error_response(exc: Exception, engine: str = "rpc_bridge") -> dict[str, Any]:
     """Return a structured, non-crashing MCP response when authentication is missing."""
     return {
@@ -57,7 +60,7 @@ def _auth_error_response(exc: Exception, engine: str = "rpc_bridge") -> dict[str
             "run `agy-gemini-notebook login` in your terminal, or set `GCP_PROJECT_NUMBER` "
             "with `gcloud auth login` for Google Cloud Enterprise."
         ),
-        "sidecar_link": "sidecar://gemini-notebook/notebook_context_panel",
+        "sidecar_link": SIDECAR_URI,
     }
 
 
@@ -169,12 +172,18 @@ async def notebook_status(workspace_dir: str | None = None) -> dict[str, Any]:
     info = describe_environment(workspace_dir)
     bridge = NotebookRpcBridge()
     resolved_storage = bridge.resolve_storage_path()
+    has_session = bridge.has_saved_session()
     info["rpc_bridge"] = {
         "notebooklm_py_installed": bridge.is_available(),
-        "has_saved_session": bridge.has_saved_session(),
+        "has_saved_session": has_session,
         "profile": bridge.profile or "default",
         "storage_path": str(resolved_storage) if resolved_storage else None,
     }
+    gcp_info = info.get("gcp_enterprise_rest") or {}
+    info["setup_ready"] = bool(
+        has_session or (gcp_info.get("configured") and gcp_info.get("gcloud_authenticated"))
+    )
+    info["sidecar_link"] = SIDECAR_URI
     return info
 
 
@@ -236,7 +245,7 @@ async def notebook_attach(
         "status": "attached",
         "binding_file": str(saved_path),
         "binding": binding.model_dump(exclude_none=True),
-        "sidecar_link": "sidecar://gemini-notebook/notebook_context_panel",
+        "sidecar_link": SIDECAR_URI,
     }
 
 
@@ -267,7 +276,7 @@ async def notebook_invoke(
     result: dict[str, Any] = {
         "invoked_notebook_id": resolved_id,
         "target": target or "active_workspace_notebook",
-        "sidecar_link": "sidecar://gemini-notebook/notebook_context_panel",
+        "sidecar_link": SIDECAR_URI,
     }
     if include_sources or not question:
         details = await notebook_get(
@@ -384,7 +393,7 @@ async def notebook_create(
             workspace_dir=workspace_dir,
         )
         created["attached_to_workspace"] = True
-        created["sidecar_link"] = "sidecar://gemini-notebook/notebook_context_panel"
+        created["sidecar_link"] = SIDECAR_URI
     return created
 
 

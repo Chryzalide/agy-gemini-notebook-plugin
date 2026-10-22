@@ -1,20 +1,19 @@
 {
   "args": [
-    "-c",
-    "for f in server.py sidecars/notebook_context_panel/server.py \"$HOME/.gemini/config/plugins/gemini-notebook/sidecars/notebook_context_panel/server.py\"; do if [ -f \"$f\" ]; then exec python3 \"$f\"; fi; done"
+    "server.py"
   ],
-  "command": "bash",
-  "description": "Interactive Gemini Notebook Context Selector & Source Filter for Antigravity 2",
-  "display_name": "Gemini Notebook Context",
+  "command": "python3",
+  "description": "Interactive Gemini Notebook Context Selector & Source Filter by Chryzalide",
+  "display_name": "Gemini Notebook by Chryzalide",
   "has_web_ui": true,
   "restart_policy": "always",
   "ui_config": {
-    "display_name": "Gemini Notebook Context",
+    "display_name": "Gemini Notebook by Chryzalide",
     "views": [
       {
         "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
         "path": "/ui.html",
-        "title": "Gemini Notebook"
+        "title": "Gemini Notebook by Chryzalide"
       }
     ]
   }

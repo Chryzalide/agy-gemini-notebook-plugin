@@ -433,6 +433,48 @@ async def api_login_notebook(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _inject_sidecar_query_params(html: str, token: str | None, conversation_id: str | None) -> str:
+    """Append `token` and `conversationId` query parameters to local `/...` links in HTML."""
+    if not token:
+        return html
+    import re
+    from urllib.parse import quote
+
+    extra = f"token={quote(token)}"
+    if conversation_id:
+        extra += f"&conversationId={quote(conversation_id)}"
+
+    def _repl(match: re.Match[str]) -> str:
+        attr, quote_char, url = match.group(1), match.group(2), match.group(3)
+        if url.startswith("//"):
+            return match.group(0)
+        parts = url.split("#", 1)
+        base = parts[0]
+        frag = f"#{parts[1]}" if len(parts) > 1 else ""
+        sep = "&" if "?" in base else "?"
+        return f"{attr}={quote_char}{base}{sep}{extra}{frag}{quote_char}"
+
+    return re.sub(r"\b(href|src)=([\"'])(/[^\"'\s>]*)\2", _repl, html)
+
+
+def _load_preload_js() -> str:
+    """Return the Antigravity sidecar `preload.js` bridge script or a compatible stub."""
+    app_data = os.environ.get("ANTIGRAVITY_APP_DATA_DIR", "").strip()
+    candidates = []
+    if app_data:
+        candidates.append(Path(app_data) / "lib" / "node_modules" / "sidecar_sdk" / "preload.js")
+    candidates.append(
+        Path.home() / ".gemini" / "antigravity" / "lib" / "node_modules" / "sidecar_sdk" / "preload.js"
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            try:
+                return candidate.read_text(encoding="utf-8")
+            except OSError:
+                pass
+    return "// Preload bridge\nwindow.__sidecarReady = true;\n"
+
+
 class SidecarRequestHandler(SimpleHTTPRequestHandler):
     """Serves `ui.html`, static assets, and `/api/*` JSON endpoints for the Aux Pane sidecar."""
 
@@ -446,14 +488,32 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
             return
         super().log_message(format, *args)
 
-    def _send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    def end_headers(self) -> None:
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Sidecar-Token")
+        super().end_headers()
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(HTTPStatus.NO_CONTENT)
+        self.end_headers()
+
+    def _send_bytes(
+        self,
+        body: bytes,
+        content_type: str = "text/html; charset=utf-8",
+        status: int = HTTPStatus.OK,
+    ) -> None:
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self._send_bytes(body, content_type="application/json; charset=utf-8", status=status)
 
     def _read_json_body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or "0")
@@ -479,9 +539,35 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
         ws = self._effective_workspace_dir(params)
         engine = (params.get("engine") or ["auto"])[0]
 
-        if route in ("/", ""):
-            self.path = "/ui.html"
-            return super().do_GET()
+        if route == "/preload.js":
+            self._send_bytes(
+                _load_preload_js().encode("utf-8"),
+                content_type="application/javascript; charset=utf-8",
+            )
+            return
+
+        if route == "/shell.css":
+            self._send_bytes(
+                b"/* Sidecar shell styles */\n",
+                content_type="text/css; charset=utf-8",
+            )
+            return
+
+        if route in ("/", "", "/ui.html"):
+            ui_path = SIDECAR_DIR / "ui.html"
+            html = ui_path.read_text(encoding="utf-8")
+            token = (
+                (params.get("token") or [None])[0]
+                or (self.headers.get("X-Sidecar-Token") or "").strip()
+                or None
+            )
+            conv_id = (
+                (params.get("conversationId") or params.get("conversation_id") or [None])[0]
+                or os.environ.get("ANTIGRAVITY_CONVERSATION_ID")
+            )
+            html = _inject_sidecar_query_params(html, token, conv_id)
+            self._send_bytes(html.encode("utf-8"), content_type="text/html; charset=utf-8")
+            return
 
         if route == "/api/status":
             data = asyncio.run(api_get_status(workspace_dir=ws, engine=engine))
@@ -594,14 +680,91 @@ def create_server(
     return ThreadingHTTPServer((host, port), BoundSidecarHandler)
 
 
+def resolve_sidecar_port(default: int = 8000) -> int:
+    """Resolve the HTTP port assigned by Antigravity 2 (`ANTIGRAVITY_SIDECAR_WEB_PORT`) or `PORT`."""
+    for env_key in ("ANTIGRAVITY_SIDECAR_WEB_PORT", "PORT"):
+        raw = os.environ.get(env_key, "").strip()
+        if raw:
+            try:
+                return int(raw)
+            except ValueError:
+                continue
+    return default
+
+
+def _sidecar_data_dirs() -> list[Path]:
+    """Return candidate Antigravity 2 sidecar data directories for `server_info.json`."""
+    dirs: list[Path] = []
+    exec_dir = os.environ.get("ANTIGRAVITY_EXECUTABLE_DATA_DIR", "").strip()
+    if exec_dir:
+        dirs.append(Path(exec_dir))
+    app_data = os.environ.get("ANTIGRAVITY_APP_DATA_DIR", "").strip()
+    base = Path(app_data) if app_data else (Path.home() / ".gemini" / "antigravity")
+    dirs.append(base / "sidecar_data" / "gemini-notebook" / "notebook_context_panel" / "data")
+    dirs.append(base / "sidecar_data" / "notebook_context_panel" / "data")
+    return dirs
+
+
+def _write_server_info(host: str, port: int) -> list[Path]:
+    """Write `server_info.json` so Antigravity 2 can discover the active sidecar port and token."""
+    token = (
+        os.environ.get("ANTIGRAVITY_SIDECAR_UI_TOKEN")
+        or os.environ.get("ANTIGRAVITY_SIDECAR_AUTH_TOKEN")
+        or os.environ.get("ANTIGRAVITY_SIDECAR_WEB_TOKEN")
+    )
+    payload = json.dumps(
+        {
+            "host": host,
+            "port": port,
+            "token": token,
+            "pid": os.getpid(),
+        },
+        indent=2,
+    )
+    written: list[Path] = []
+    for d in _sidecar_data_dirs():
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            info_path = d / "server_info.json"
+            info_path.write_text(payload + "\n", encoding="utf-8")
+            os.chmod(info_path, 0o600)
+            written.append(info_path)
+        except OSError:
+            continue
+    return written
+
+
 def main() -> None:
-    port = int(os.environ.get("PORT", "8765"))
+    import signal
+
+    port = resolve_sidecar_port(default=8000)
     server = create_server("127.0.0.1", port)
+    actual_port = int(server.server_address[1])
+    info_files = _write_server_info("127.0.0.1", actual_port)
+
+    def _cleanup(*_args: Any) -> None:
+        for p in info_files:
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _cleanup)
+    signal.signal(signal.SIGTERM, _cleanup)
+
     print(
-        f"Gemini Notebook Sidecar UI listening on http://127.0.0.1:{port}/ui.html",
+        f"Gemini Notebook by Chryzalide Sidecar UI listening on http://127.0.0.1:{actual_port}/ui.html",
         flush=True,
     )
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        for p in info_files:
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

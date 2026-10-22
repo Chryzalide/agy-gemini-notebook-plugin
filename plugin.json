@@ -1,12 +1,12 @@
 {
   "name": "gemini-notebook",
-  "displayName": "Gemini Notebook (NotebookLM)",
-  "version": "1.0.1",
+  "displayName": "Gemini Notebook by Chryzalide",
+  "version": "1.0.2",
   "description": "Connect Antigravity 2 conversations and workspaces to Gemini Notebooks (NotebookLM & NotebookLM Enterprise) for grounded context, source synchronization, Deep Research, and interactive Q&A.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
+    "Run the Gemini Notebook setup and authentication workflow for this workspace",
     "List my Gemini Notebooks and attach one to this workspace",
-    "Sync README.md and AGENTS.md to the active Gemini Notebook",
-    "Run Deep Research on our architecture topic and import the cited sources"
+    "Run Deep Research on our architecture topic and synthesize findings into local .md docs"
   ]
 }

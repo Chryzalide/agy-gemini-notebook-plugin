@@ -35,8 +35,54 @@ def _print_json(data: Any) -> None:
     print(json.dumps(data, indent=2, ensure_ascii=False))
 
 
+async def _run_setup(args: argparse.Namespace) -> dict[str, Any]:
+    from pathlib import Path
+
+    from agy_gemini_notebook.engines.rpc_bridge import (
+        PLUGIN_ROOT,
+        _prepare_playwright_browsers_env,
+    )
+
+    plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
+    plugin_link = plugins_dir / "gemini-notebook"
+    link_status = "already_present"
+    try:
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+        if not plugin_link.exists() and not plugin_link.is_symlink():
+            plugin_link.symlink_to(PLUGIN_ROOT)
+            link_status = "created"
+    except OSError as exc:
+        link_status = f"skipped ({exc})"
+
+    playwright_dir = _prepare_playwright_browsers_env()
+    login_result: dict[str, Any] | None = None
+    if getattr(args, "login", False):
+        login_result = await notebook_login(
+            browser=getattr(args, "browser", "chromium"),
+            timeout=getattr(args, "timeout", 300),
+        )
+
+    status = await notebook_status(workspace_dir=args.workspace)
+    return {
+        "status": "ok",
+        "plugin_display_name": "Gemini Notebook by Chryzalide",
+        "plugin_link": str(plugin_link),
+        "plugin_link_status": link_status,
+        "playwright_browsers_dir": playwright_dir,
+        "login_result": login_result,
+        "environment": status,
+        "next_steps": [
+            "1. Reload or restart Antigravity 2 once if this is a fresh plugin installation.",
+            "2. Open 'Overview -> Plugins -> Gemini Notebook by Chryzalide' or click the Sidecar pill link.",
+            "3. Authenticate via 'agy-gemini-notebook login' (or the Sidecar 'Sign In' button) if setup_ready is false.",
+        ],
+    }
+
+
 async def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     cmd = args.command
+    if cmd == "setup":
+        return await _run_setup(args)
     if cmd == "status":
         return await notebook_status(workspace_dir=args.workspace)
     if cmd == "login":
@@ -200,6 +246,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Backend engine preference (default: auto).",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    # setup
+    p_setup = sub.add_parser(
+        "setup",
+        help="Run the installation, browser check, plugin registration, and auth setup workflow.",
+    )
+    p_setup.add_argument(
+        "--login",
+        action="store_true",
+        help="Also launch interactive Google NotebookLM browser sign-in.",
+    )
+    p_setup.add_argument(
+        "--browser",
+        default="chromium",
+        choices=["chromium", "chrome", "msedge"],
+        help="Browser channel when --login is specified (default: chromium).",
+    )
+    p_setup.add_argument(
+        "--timeout",
+        type=int,
+        default=300,
+        help="Seconds to wait for interactive sign-in when --login is specified.",
+    )
 
     # status
     sub.add_parser("status", help="Show workspace notebook binding and engine auth status.")

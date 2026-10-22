@@ -44,10 +44,19 @@ Use this skill whenever the user mentions **Gemini Notebook**, **NotebookLM**, *
 
 ## Recommended Workflows
 
+### Workflow 0: First-Time Installation, Setup & Authentication
+When the user installs **Gemini Notebook by Chryzalide** or asks to set up / configure the plugin:
+1. **Check Environment Readiness**: Call `notebook_status` (or run `agy-gemini-notebook setup`).
+2. **Authenticate Engine**:
+   - **Engine 2 (`notebooklm.google.com` Personal / Workspace Account)**: Call `notebook_login` (or instruct the user to run `./scripts/setup.sh --login` / `.venv/bin/agy-gemini-notebook login` or click **"🔑 Sign In to Google NotebookLM"** in the Sidecar panel).
+   - **Engine 1 (Google Cloud NotebookLM Enterprise `v1alpha`)**: Set `GCP_PROJECT_NUMBER` and authenticate via `gcloud auth login`.
+3. **Bind or Create a Workspace Notebook**: Call `notebook_list` and `notebook_attach`, or `notebook_create(title="...", attach_to_workspace=True)`.
+4. **Open Sidecar UI**: Surface `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` (note: after a fresh plugin install, remind the user to reload/restart Antigravity 2 once so the Sidecar server starts).
+
 ### Workflow A: Invoking a Notebook to Ground a Coding Task
 1. Call `notebook_invoke(target="...", question="...")` (or `notebook_status` + `notebook_query`).
 2. Cite the notebook title and specific source names in your response.
-3. In Antigravity 2, surface `[Open Gemini Notebook Panel](sidecar://gemini-notebook/notebook_context_panel)` when attaching or updating workspace notebooks.
+3. In Antigravity 2, surface `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` when attaching or updating workspace notebooks.
 
 ### Workflow B: Piloting Deep Research into a New or Active Notebook
 1. Call `notebook_research(query="...", mode="deep", source="web", wait=True, import_sources=True, create_notebook_title="...")` (or omit `create_notebook_title` to use the attached notebook).

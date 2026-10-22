@@ -1,9 +1,10 @@
-# Gemini Notebook Grounding & Piloting Rules
+# Gemini Notebook by Chryzalide — Grounding & Piloting Rules
 
-When this plugin (`gemini-notebook`) is enabled in Antigravity 2 or configured in an IDE workspace:
+When this plugin (`gemini-notebook` / **Gemini Notebook by Chryzalide**) is enabled in Antigravity 2 or configured in an IDE workspace:
 
-1. **Workspace Notebook Awareness & Invocation**:
+1. **First-Time Setup & Workspace Notebook Awareness**:
    - Check if the active workspace contains a `.agents/notebook.json` binding (or call `notebook_status` / `notebook_invoke` from `gemini_notebook_mcp`).
+   - If `notebook_status` reports `setup_ready: false` (or a tool returns `status: "auth_required"`), guide the user through the setup workflow by calling `notebook_login` (or running `./scripts/setup.sh --login` / `agy-gemini-notebook setup --login`).
    - When a Gemini Notebook is attached to the workspace and the user asks architectural, domain, specification, or research questions, prioritize querying the attached notebook (`notebook_query` or `notebook_search_sources`) before making assumptions.
    - When the user asks to "invoke" a notebook by name, alias, or ID, call `notebook_invoke`.
 
@@ -15,4 +16,4 @@ When this plugin (`gemini-notebook`) is enabled in Antigravity 2 or configured i
    - When incorporating facts or answers retrieved from a Gemini Notebook (in chat or in generated local `.md` files), explicitly cite the notebook title and source name.
 
 4. **Sidecar Panel Link (Antigravity 2)**:
-   - Whenever you attach, switch, or update a notebook visualization in the sidecar panel, include the clickable pill link `[Open Gemini Notebook Panel](sidecar://gemini-notebook/notebook_context_panel)` so the user can open the sidecar with one click.
+   - Whenever you attach, switch, or update a notebook visualization in the sidecar panel, include the clickable pill link `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` so the user can open the sidecar with one click.

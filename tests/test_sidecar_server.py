@@ -148,14 +148,27 @@ def test_sidecar_http_lifecycle_and_endpoints(
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
 
+    monkeypatch.setenv("ANTIGRAVITY_SIDECAR_WEB_PORT", "43210")
+    assert server_mod.resolve_sidecar_port() == 43210
+    monkeypatch.delenv("ANTIGRAVITY_SIDECAR_WEB_PORT", raising=False)
+
     try:
-        # 1. Serve UI HTML
-        with _DIRECT_OPENER.open(f"{base_url}/", timeout=5) as resp:
+        # 1. Serve UI HTML (with token & conversationId injection) and /preload.js
+        with _DIRECT_OPENER.open(
+            f"{base_url}/ui.html?token=sec-tok&conversationId=conv-42", timeout=5
+        ) as resp:
             html = resp.read().decode("utf-8")
             assert resp.status == 200
+            assert "Gemini Notebook by Chryzalide" in html
+            assert "/preload.js?token=sec-tok&conversationId=conv-42" in html
             assert 'id="notebook-select"' in html
             assert 'id="sources-list"' in html
             assert 'id="sync-docs-btn"' in html
+
+        with _DIRECT_OPENER.open(f"{base_url}/preload.js", timeout=5) as resp:
+            preload_js = resp.read().decode("utf-8")
+            assert resp.status == 200
+            assert len(preload_js) > 0
 
         # 2. GET /api/status (unattached)
         code, status_data = _http_json(f"{base_url}/api/status")
