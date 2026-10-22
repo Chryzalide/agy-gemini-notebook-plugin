@@ -39,8 +39,8 @@ async def _run_setup(args: argparse.Namespace) -> dict[str, Any]:
     from pathlib import Path
 
     from agy_gemini_notebook.engines.rpc_bridge import (
+        COMPLIANCE_NOTICE,
         PLUGIN_ROOT,
-        NotebookRpcBridge,
     )
 
     plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
@@ -54,11 +54,13 @@ async def _run_setup(args: argparse.Namespace) -> dict[str, Any]:
     except OSError as exc:
         link_status = f"skipped ({exc})"
 
-    playwright_dir = NotebookRpcBridge._prepare_playwright_browsers_env()
     login_result: dict[str, Any] | None = None
     if getattr(args, "login", False):
         login_result = await notebook_login(
-            browser=getattr(args, "browser", "chromium"),
+            browser_cookies=getattr(args, "browser_cookies", "auto"),
+            account=getattr(args, "account", None),
+            gcloud=getattr(args, "gcloud", False),
+            browser=getattr(args, "browser", "auto"),
             timeout=getattr(args, "timeout", 300),
         )
 
@@ -68,13 +70,13 @@ async def _run_setup(args: argparse.Namespace) -> dict[str, Any]:
         "plugin_display_name": "Gemini Notebook by Chryzalide",
         "plugin_link": str(plugin_link),
         "plugin_link_status": link_status,
-        "playwright_browsers_dir": playwright_dir,
         "login_result": login_result,
         "environment": status,
+        "compliance_notice": COMPLIANCE_NOTICE,
         "next_steps": [
             "1. Reload or restart Antigravity 2 once if this is a fresh plugin installation.",
             "2. Open 'Overview -> Plugins -> Gemini Notebook by Chryzalide' or click the Sidecar pill link.",
-            "3. Authenticate via 'agy-gemini-notebook login' (or the Sidecar 'Sign In' button) if setup_ready is false.",
+            "3. Connect your session via 'agy-gemini-notebook login' (or the Sidecar 'Connect Session from Browser' button) if setup_ready is false.",
         ],
     }
 
@@ -87,10 +89,12 @@ async def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
         return await notebook_status(workspace_dir=args.workspace)
     if cmd == "login":
         return await notebook_login(
-            browser=args.browser,
-            timeout=args.timeout,
             browser_cookies=args.browser_cookies,
             account=args.account,
+            gcloud=args.gcloud,
+            open_system_browser=args.open_browser,
+            browser=args.browser,
+            timeout=args.timeout,
             fresh=args.fresh,
         )
     if cmd == "list":
@@ -250,24 +254,38 @@ def build_parser() -> argparse.ArgumentParser:
     # setup
     p_setup = sub.add_parser(
         "setup",
-        help="Run the installation, browser check, plugin registration, and auth setup workflow.",
+        help="Run the installation, plugin registration, and auth setup workflow.",
     )
     p_setup.add_argument(
         "--login",
         action="store_true",
-        help="Also launch interactive Google NotebookLM browser sign-in.",
+        help="Also connect your Gemini Notebook session from your installed browser (or gcloud).",
+    )
+    p_setup.add_argument(
+        "--browser-cookies",
+        default="auto",
+        help="Browser source for session import when --login is set (default: auto).",
+    )
+    p_setup.add_argument(
+        "--account",
+        default=None,
+        help="Optional Google account email when multiple accounts are signed in.",
+    )
+    p_setup.add_argument(
+        "--gcloud",
+        action="store_true",
+        help="Authenticate Engine 1 via official `gcloud auth login` when --login is set.",
     )
     p_setup.add_argument(
         "--browser",
-        default="chromium",
-        choices=["chromium", "chrome", "msedge"],
-        help="Browser channel when --login is specified (default: chromium).",
+        default="auto",
+        help="Browser alias when --login is specified (default: auto).",
     )
     p_setup.add_argument(
         "--timeout",
         type=int,
         default=300,
-        help="Seconds to wait for interactive sign-in when --login is specified.",
+        help="Timeout in seconds (default: 300).",
     )
 
     # status
@@ -276,34 +294,43 @@ def build_parser() -> argparse.ArgumentParser:
     # login
     p_login = sub.add_parser(
         "login",
-        help="Authenticate with Google NotebookLM via browser window or browser cookie import.",
-    )
-    p_login.add_argument(
-        "--browser",
-        default="chromium",
-        choices=["chromium", "chrome", "msedge"],
-        help="Browser channel for interactive login (default: chromium).",
+        help="Connect your Gemini Notebook session from an installed browser (--browser-cookies) or official gcloud OAuth.",
     )
     p_login.add_argument(
         "--browser-cookies",
-        default=None,
-        help="Import cookies from an installed browser (e.g. 'chrome', 'brave', 'firefox').",
+        default="auto",
+        help="Import active session from an installed browser: 'auto', 'chrome', 'brave', 'firefox', 'edge', 'chromium' (default: auto).",
     )
     p_login.add_argument(
         "--account",
         default=None,
-        help="Google account email when using --browser-cookies.",
+        help="Google account email when multiple accounts are signed in to your browser.",
+    )
+    p_login.add_argument(
+        "--gcloud",
+        action="store_true",
+        help="Authenticate Engine 1 (Google Cloud Enterprise REST) via official `gcloud auth login`.",
+    )
+    p_login.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Open https://notebooklm.google.com/ in your genuine OS system browser first.",
+    )
+    p_login.add_argument(
+        "--browser",
+        default="auto",
+        help="Browser alias fallback (default: auto).",
     )
     p_login.add_argument(
         "--timeout",
         type=int,
         default=300,
-        help="Seconds to wait for interactive browser sign-in (default: 300).",
+        help="Timeout in seconds (default: 300).",
     )
     p_login.add_argument(
         "--fresh",
         action="store_true",
-        help="Start with a clean browser profile.",
+        help="Reset cached session state before importing.",
     )
 
     # list

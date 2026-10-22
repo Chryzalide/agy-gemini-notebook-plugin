@@ -487,50 +487,119 @@
       color: var(--nb-text-secondary);
       padding: 6px 0;
     }
+
+    .compliance-alert {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(253, 214, 99, 0.1);
+      border: 1px solid rgba(253, 214, 99, 0.35);
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--nb-text-secondary);
+    }
+
+    .compliance-alert strong {
+      color: var(--nb-warning);
+    }
+
+    .auth-controls {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-row .btn {
+      margin-top: 0;
+      flex: 1;
+    }
   </style>
 </head>
 <body>
-  <div class="header">
+  <header class="header">
     <div class="header-title">
       <h1>📓 Gemini Notebook by Chryzalide</h1>
-      <span id="active-engine-badge" class="badge">Dual-Engine v1.0.3</span>
+      <span id="active-engine-badge" class="badge">Dual-Engine v1.0.4</span>
     </div>
     <div class="header-actions">
       <button id="refresh-btn" class="icon-btn" type="button" title="Refresh status and notebooks">
         ↻ Refresh
       </button>
     </div>
-  </div>
+  </header>
 
+  <main id="main-content">
   <!-- 1. Live Engine Status Card -->
   <div class="card">
     <div class="card-header">
       <h2>Available Engines (Live Auth)</h2>
-      <select id="engine-select" class="select-input" style="width: auto; padding: 3px 8px;" aria-label="Preferred engine">
-        <option value="auto">Auto Route</option>
-        <option value="gcp_rest">GCP REST v1alpha</option>
-        <option value="rpc_bridge">RPC Bridge</option>
-      </select>
+      <div>
+        <label for="engine-select" class="engine-sub" style="margin-inline-end: 4px;">Route:</label>
+        <select id="engine-select" name="engine" class="select-input" style="width: auto; padding: 3px 8px;">
+          <option value="auto">Auto Route</option>
+          <option value="gcp_rest">GCP REST v1alpha</option>
+          <option value="rpc_bridge">RPC Bridge</option>
+        </select>
+      </div>
     </div>
     <div class="engine-grid">
       <div class="engine-row">
         <div class="engine-meta">
-          <span class="engine-name">Engine 1 • GCP REST v1alpha</span>
+          <span class="engine-name">Engine 1 • GCP REST v1alpha (Official API)</span>
           <span id="gcp-engine-sub" class="engine-sub">Checking Google Cloud project &amp; token…</span>
         </div>
         <span id="gcp-engine-badge" class="badge">Checking…</span>
       </div>
       <div class="engine-row">
         <div class="engine-meta">
-          <span class="engine-name">Engine 2 • RPC Bridge</span>
+          <span class="engine-name">Engine 2 • RPC Bridge (Community Session)</span>
           <span id="rpc-engine-sub" class="engine-sub">Checking notebooklm-py session…</span>
         </div>
         <span id="rpc-engine-badge" class="badge">Checking…</span>
       </div>
     </div>
-    <button id="login-rpc-btn" class="btn primary" type="button" style="display: none;">
-      🔑 Sign In to Google NotebookLM
-    </button>
+
+    <div id="rpc-auth-controls" class="auth-controls">
+      <label for="cookie-browser-select" class="engine-sub" style="display: block;">
+        Import existing <code>notebooklm.google.com</code> session from your installed browser (no Playwright sign-in):
+      </label>
+      <div class="field-row" style="margin-top: 0;">
+        <select id="cookie-browser-select" name="browser_cookies" class="select-input">
+          <option value="auto">Auto-detect Installed Browser</option>
+          <option value="chrome">Google Chrome</option>
+          <option value="brave">Brave Browser</option>
+          <option value="firefox">Mozilla Firefox</option>
+          <option value="edge">Microsoft Edge</option>
+          <option value="chromium">Chromium</option>
+          <option value="vivaldi">Vivaldi</option>
+          <option value="arc">Arc</option>
+          <option value="safari">Safari (macOS)</option>
+        </select>
+      </div>
+      <button id="login-rpc-btn" class="btn primary" type="button">
+        🔗 Connect Session from Browser
+      </button>
+      <div class="btn-row">
+        <button id="open-browser-btn" class="btn" type="button" title="Open notebooklm.google.com in your genuine OS browser">
+          🌐 Open notebooklm.google.com
+        </button>
+        <button id="login-gcloud-btn" class="btn" type="button" title="Run official gcloud auth login for Engine 1">
+          ☁️ Google Cloud Login (gcloud)
+        </button>
+      </div>
+    </div>
+
+    <div class="compliance-alert" role="note">
+      <strong>⚠️ Compliance &amp; Grey-Area Notice:</strong><br />
+      • <strong>Engine 1 (100% Official):</strong> Uses <code>gcloud auth login</code> OAuth 2.0 &amp; Google Cloud Discovery Engine <code>v1alpha</code>.<br />
+      • <strong>Engine 2 (Grey Area):</strong> Imports your local browser cookies (<code>--browser-cookies</code>, zero Playwright automation on <code>accounts.google.com</code>) to call undocumented <code>notebooklm.google.com</code> web RPCs. Not affiliated with Google—use at your own discretion.
+    </div>
   </div>
 
   <!-- 2. Active Workspace Notebook & 1-Click Switcher -->
@@ -553,18 +622,24 @@
       Switch active workspace notebook (1-click):
     </label>
     <div class="field-row" style="margin-top: 0;">
-      <select id="notebook-select" class="select-input" aria-label="Select active workspace notebook">
+      <select id="notebook-select" name="notebook_id" class="select-input">
         <option value="">— Loading available notebooks… —</option>
       </select>
     </div>
 
-    <div class="field-row">
+    <label for="create-notebook-input" class="engine-sub" style="display:block; margin-top: 8px; margin-bottom: 4px;">
+      Or create &amp; attach a new Gemini Notebook:
+    </label>
+    <div class="field-row" style="margin-top: 0;">
       <input
         id="create-notebook-input"
+        name="new_notebook_title"
         class="text-input"
         type="text"
         placeholder="New notebook title…"
-        aria-label="New notebook title"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
       />
       <button id="create-notebook-btn" class="btn inline primary" type="button">
         + Create
@@ -613,6 +688,7 @@
   </div>
 
   <div id="status-toast" class="status-toast" role="status" aria-live="polite"></div>
+  </main>
 
   <script>
     function syncHostTheme() {
@@ -651,7 +727,10 @@
       gcpBadge: document.getElementById("gcp-engine-badge"),
       rpcSub: document.getElementById("rpc-engine-sub"),
       rpcBadge: document.getElementById("rpc-engine-badge"),
+      cookieBrowserSelect: document.getElementById("cookie-browser-select"),
       loginRpcBtn: document.getElementById("login-rpc-btn"),
+      openBrowserBtn: document.getElementById("open-browser-btn"),
+      loginGcloudBtn: document.getElementById("login-gcloud-btn"),
       bindingBadge: document.getElementById("binding-status-badge"),
       activeTitle: document.getElementById("active-notebook-title"),
       activeId: document.getElementById("active-notebook-id"),
@@ -737,17 +816,16 @@
         els.rpcBadge.textContent = "Authenticated";
         els.rpcBadge.className = "badge ok";
         els.rpcSub.textContent = `Profile: ${rpc.profile || "default"} • Grounded Q&A ready`;
-        els.loginRpcBtn.style.display = "none";
+        els.loginRpcBtn.textContent = "↻ Refresh Session from Browser";
       } else if (rpc.notebooklm_py_installed) {
-        els.rpcBadge.textContent = "Login Needed";
+        els.rpcBadge.textContent = "Session Needed";
         els.rpcBadge.className = "badge warn";
-        els.rpcSub.textContent = "Click 'Sign In' below or run `agy-gemini-notebook login`";
-        els.loginRpcBtn.style.display = "inline-flex";
+        els.rpcSub.textContent = "Click 'Connect Session from Browser' below (1s)";
+        els.loginRpcBtn.textContent = "🔗 Connect Session from Browser";
       } else {
         els.rpcBadge.textContent = "Unavailable";
         els.rpcBadge.className = "badge err";
         els.rpcSub.textContent = "Install notebooklm-py (`uv sync --extra rpc`)";
-        els.loginRpcBtn.style.display = "none";
       }
     }
 
@@ -1062,25 +1140,71 @@
     }
 
     async function handleRpcLogin() {
+      const cookieSource = (els.cookieBrowserSelect && els.cookieBrowserSelect.value) || "auto";
       els.loginRpcBtn.disabled = true;
-      els.loginRpcBtn.textContent = "⏳ Opening Google Sign-In Browser…";
-      showToast("Complete Google sign-in in the browser window that just opened.", "ok");
+      els.loginRpcBtn.textContent = `⏳ Importing session (${cookieSource})…`;
+      showToast(
+        `Reading active notebooklm.google.com session from your ${cookieSource} browser…`,
+        "ok"
+      );
       try {
         const res = await fetchJson("/api/login", {
           method: "POST",
-          body: JSON.stringify({ browser: "chromium", timeout: 300 }),
+          body: JSON.stringify({ browser_cookies: cookieSource }),
         });
         if (res.status === "authenticated" || res.authenticated) {
-          showToast("Authenticated with Google NotebookLM!", "ok");
+          showToast("Connected to Google NotebookLM session from browser!", "ok");
           await refreshAll();
         } else {
-          showToast(res.error || "Sign-in did not complete.", "err");
+          showToast(res.error || "Could not import session from browser.", "err");
         }
       } catch (err) {
-        showToast(`Sign-in failed: ${err.message}`, "err");
+        showToast(`Session import failed: ${err.message}`, "err");
       } finally {
         els.loginRpcBtn.disabled = false;
-        els.loginRpcBtn.textContent = "🔑 Sign In to Google NotebookLM";
+        els.loginRpcBtn.textContent = "🔗 Connect Session from Browser";
+      }
+    }
+
+    async function handleOpenSystemBrowser() {
+      els.openBrowserBtn.disabled = true;
+      try {
+        const res = await fetchJson("/api/login", {
+          method: "POST",
+          body: JSON.stringify({ open_system_browser: true }),
+        });
+        showToast(
+          res.message ||
+            "Opened https://notebooklm.google.com/ in your OS browser. Sign in there, then click 'Connect Session from Browser'.",
+          "ok"
+        );
+      } catch (err) {
+        showToast(`Could not open browser: ${err.message}`, "err");
+      } finally {
+        els.openBrowserBtn.disabled = false;
+      }
+    }
+
+    async function handleGcloudLogin() {
+      els.loginGcloudBtn.disabled = true;
+      els.loginGcloudBtn.textContent = "⏳ Launching gcloud OAuth…";
+      showToast("Complete official Google Cloud OAuth sign-in in your system browser.", "ok");
+      try {
+        const res = await fetchJson("/api/login", {
+          method: "POST",
+          body: JSON.stringify({ gcloud: true }),
+        });
+        if (res.status === "authenticated" || res.authenticated) {
+          showToast("Authenticated with Google Cloud OAuth (Engine 1)!", "ok");
+          await refreshAll();
+        } else {
+          showToast(res.error || "gcloud auth login did not complete.", "err");
+        }
+      } catch (err) {
+        showToast(`gcloud login failed: ${err.message}`, "err");
+      } finally {
+        els.loginGcloudBtn.disabled = false;
+        els.loginGcloudBtn.textContent = "☁️ Google Cloud Login (gcloud)";
       }
     }
 
@@ -1152,6 +1276,8 @@
 
     els.refreshBtn.addEventListener("click", refreshAll);
     els.loginRpcBtn.addEventListener("click", handleRpcLogin);
+    els.openBrowserBtn.addEventListener("click", handleOpenSystemBrowser);
+    els.loginGcloudBtn.addEventListener("click", handleGcloudLogin);
     els.engineSelect.addEventListener("change", () => {
       state.engine = els.engineSelect.value;
       refreshAll();
@@ -1167,7 +1293,7 @@
     els.selectAllCheckbox.addEventListener("change", handleSelectAllSourcesChange);
     els.createBtn.addEventListener("click", handleCreateNotebook);
     els.createInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && !e.isComposing) {
         e.preventDefault();
         handleCreateNotebook();
       }

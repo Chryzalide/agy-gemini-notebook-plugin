@@ -1,6 +1,6 @@
 # 📓 Gemini Notebook by Chryzalide (`agy-gemini-notebook-plugin`)
 
-![Version](https://img.shields.io/badge/version-v1.0.3-blue)
+![Version](https://img.shields.io/badge/version-v1.0.4-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
@@ -103,15 +103,38 @@ flowchart LR
 
 ---
 
+## ⚖️ Google Terms of Service, OAuth Policy & Dual-Engine Compliance
+
+Because this plugin bridges both **Google Cloud Enterprise APIs** and **consumer Google NotebookLM**, it is designed around strict separation of credentials and transparent compliance boundaries:
+
+1. **Zero Gemini CLI / Antigravity OAuth Siphoning**:
+   - This plugin **never** reads, extracts, or repurposes internal OAuth tokens belonging to Google Antigravity 2, Gemini CLI, or Cloud Code (`cloudcode-pa.googleapis.com`).
+2. **Zero Automated Browser Sign-In on `accounts.google.com`**:
+   - In accordance with **Google Identity's OAuth 2.0 Policy ("Use Secure Browsers")**, this plugin **never** launches a Playwright/Puppeteer/Selenium-controlled browser window on `accounts.google.com` and **never** uses stealth flags such as `--disable-blink-features=AutomationControlled`.
+3. **Engine 1 — Official Google Cloud NotebookLM Enterprise (`v1alpha` REST API) — 100% Official & Supported**:
+   - Uses standard Google Cloud OAuth 2.0 Bearer tokens (`gcloud auth login` / `gcloud auth print-access-token`) against `https://{ENDPOINT_LOCATION}-discoveryengine.googleapis.com/v1alpha/projects/{PROJECT_NUMBER}/locations/{LOCATION}/notebooks`.
+   - **Recommended for corporate, production, and strict-compliance environments.**
+
+> [!WARNING]
+> **Engine 2 (`rpc_bridge.py` / `notebooklm-py`) — Unofficial Web RPC Grey-Area Notice**:
+> Consumer Google NotebookLM (`notebooklm.google.com`) does not yet offer a public OAuth 2.0 API. To support personal Google accounts, grounded conversational RAG, and Deep Research, **Engine 2** imports cookies from a real system browser session where you are already signed in (`--browser-cookies auto|chrome|brave|firefox|edge|chromium|...`) and communicates with `notebooklm.google.com`'s internal `batchexecute` RPC endpoints via `notebooklm-py`.
+>
+> Because Google's Terms of Service generally restrict unauthorized automated access to non-public web endpoints, **Engine 2 operates in a technical "grey area"** (similar to community NotebookLM MCP clients):
+> - Use Engine 2 **at your own discretion** for personal workflows, experimentation, and low-frequency interactive queries from your IDE.
+> - Avoid high-volume automated scraping or bulk unattended polling on personal Google accounts.
+> - For strict organizational compliance, configure **Engine 1 (`GCP_PROJECT_NUMBER` + `gcloud auth login`)**.
+
+---
+
 ## 🚀 Installation & Setup Workflow
 
-To make installation and first-time onboarding effortless, **Gemini Notebook by Chryzalide** ships with a **5-step Setup Workflow** (`./scripts/setup.sh` and `agy-gemini-notebook setup`).
+To make installation and first-time onboarding effortless across **Antigravity 2**, **VS Code**, **Cursor**, and the CLI, **Gemini Notebook by Chryzalide** ships with a **5-step Setup Workflow** (`./scripts/setup.sh` and `agy-gemini-notebook setup`).
 
 ```mermaid
 flowchart LR
-    S1["1. Clone & Python .venv"] --> S2["2. Playwright Chromium Check"]
+    S1["1. Clone & Python .venv"] --> S2["2. Cookie Reader Check (rookie-cookies)"]
     S2 --> S3["3. Register Plugin in Antigravity 2"]
-    S3 --> S4["4. Authenticate (Google Sign-In or gcloud)"]
+    S3 --> S4["4. Connect Browser Session or gcloud OAuth"]
     S4 --> S5["5. Reload IDE & Attach Notebook"]
 ```
 
@@ -126,11 +149,11 @@ cd agy-gemini-notebook-plugin
 ```
 
 What `./scripts/setup.sh` does automatically:
-1. **[Step 1/5] Python Environment & Dependencies**: Creates `.venv` (via `uv` or `python3 -m venv`) and installs `agy-gemini-notebook-plugin[rpc,dev]`.
-2. **[Step 2/5] Browser Engine Verification**: Detects any existing Playwright Chromium binary in `~/.cache/ms-playwright` (or installs Chromium if needed) for interactive Google sign-in.
+1. **[Step 1/5] Python Environment & Dependencies**: Creates `.venv` (via `uv` or `python3 -m venv`) and installs `agy-gemini-notebook-plugin[rpc,dev]` (including `notebooklm-py[cookies]`).
+2. **[Step 2/5] Local Browser Session Reader Verification**: Verifies `rookie-cookies` so the plugin can import your existing session in ~1 second without downloading a 300 MB Playwright Chromium binary or automating `accounts.google.com`.
 3. **[Step 3/5] Antigravity 2 Plugin Registration**: Creates `~/.gemini/config/plugins/gemini-notebook` and enables **Gemini Notebook by Chryzalide** via the Antigravity 2 Language Server if running.
-4. **[Step 4/5] Interactive Authentication**:
-   - **Personal / Workspace Google Account (`notebooklm.google.com` — Engine 2)**: Opens a Chromium window so you can sign in to Google NotebookLM and saves your session state.
+4. **[Step 4/5] 1-Second Session Connection**:
+   - **Personal / Workspace Google Account (`notebooklm.google.com` — Engine 2)**: Imports your existing authenticated session from Chrome, Brave, Firefox, Edge, Chromium, Vivaldi, Arc, or Safari (`--browser-cookies auto`). You only need to be logged into `https://notebooklm.google.com/` in your normal browser.
    - **Google Cloud NotebookLM Enterprise (`v1alpha` REST — Engine 1)**: Checks `GCP_PROJECT_NUMBER` and `gcloud auth login`.
 5. **[Step 5/5] Health Verification**: Runs `agy-gemini-notebook status` to confirm `setup_ready: true`.
 
@@ -153,16 +176,18 @@ If you prefer to execute each setup action manually:
    ln -s "$(pwd)" ~/.gemini/config/plugins/gemini-notebook
    ```
 3. **Authenticate your preferred engine**:
-   - **Engine 2 (Personal / Workspace Google Account — `notebooklm.google.com`)**:
-     ```bash
-     .venv/bin/agy-gemini-notebook login
-     ```
-   - **Engine 1 (Google Cloud NotebookLM Enterprise — `v1alpha` REST API)**:
+   - **Engine 1 (Official Google Cloud NotebookLM Enterprise — `v1alpha` REST API)**:
      ```bash
      export GCP_PROJECT_NUMBER="123456789012"
      export GCP_LOCATION="global"          # global, us, or eu
      export GCP_ENDPOINT_LOCATION="global" # global, us, or eu
-     gcloud auth login
+     .venv/bin/agy-gemini-notebook login --gcloud
+     ```
+   - **Engine 2 (Personal / Workspace Google Account — `notebooklm.google.com`, Grey Area)**:
+     Make sure you are signed in to [https://notebooklm.google.com/](https://notebooklm.google.com/) in your regular browser, then import the session in 1 second:
+     ```bash
+     .venv/bin/agy-gemini-notebook login --browser-cookies auto
+     # Or specify a browser explicitly: chrome, brave, firefox, edge, chromium, vivaldi, arc, safari
      ```
 4. **Verify readiness**:
    ```bash
@@ -173,14 +198,16 @@ If you prefer to execute each setup action manually:
 
 ---
 
-### Option 3: In-IDE Agent-Guided Setup Workflow
+### Option 3: In-IDE Agent-Guided or 1-Click Sidecar Setup
 
-Once the plugin is linked and Antigravity 2 is reloaded, you can simply ask the agent in chat:
-> *"Run the Gemini Notebook setup and authentication workflow for this workspace"*
+Once the plugin is linked and Antigravity 2 (or VS Code / Cursor) is running:
+- **Via the Sidecar UI (Antigravity 2)**: Open the **Gemini Notebook by Chryzalide** panel, choose your browser (`Auto-detect` / `Chrome` / `Brave` / `Firefox` / etc.), and click **"🔗 Connect Session from Browser"** (or **"☁️ Google Cloud Login (`gcloud`)"** for Engine 1).
+- **Via Chat (Antigravity 2 / VS Code / Cursor)**: Ask the agent:
+  > *"Run the Gemini Notebook setup and connect my browser session for this workspace"*
 
 The agent will automatically:
 1. Call `notebook_status` to inspect your environment.
-2. Call `notebook_login` (opening the Google sign-in browser window) if `setup_ready` is `false`.
+2. Call `notebook_login(browser_cookies="auto")` to import your active browser session in 1 second (or open `https://notebooklm.google.com/` in your system browser if you aren't logged in yet) and display the Dual-Engine compliance notice.
 3. List your notebooks (`notebook_list`) or create a new one (`notebook_create`) and bind it to `.agents/notebook.json`.
 4. Surface the clickable `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` sidecar pill link.
 
@@ -189,7 +216,7 @@ The agent will automatically:
 ## 🔌 Multi-IDE & CLI Usage
 
 ### VS Code (GitHub Copilot MCP / Cline / Roo Code) & Cursor
-Add the server to your workspace `.vscode/mcp.json` (or `.cursor/mcp.json`):
+Add the server to your workspace `.vscode/mcp.json` (or `.cursor/mcp.json`). Because authentication is stored centrally in `~/.notebooklm/storage_state.json` (or via `gcloud`), **connecting your session once works simultaneously across Antigravity 2, VS Code, Cursor, and the CLI**:
 
 ```json
 {
@@ -209,14 +236,17 @@ Add the server to your workspace `.vscode/mcp.json` (or `.cursor/mcp.json`):
 Use the CLI from any terminal or agent shell tool:
 
 ```bash
-# Run the guided setup & health check workflow
+# Run the guided setup & health check workflow (imports existing browser session)
 agy-gemini-notebook setup --login
 
-# Check engine auth and active workspace binding
+# Check engine auth, active workspace binding, and compliance notice
 agy-gemini-notebook status
 
-# Authenticate Google NotebookLM browser session
-agy-gemini-notebook login
+# Import Google NotebookLM session from your normal browser (auto, chrome, brave, firefox, etc.)
+agy-gemini-notebook login --browser-cookies auto
+
+# Or authenticate Official Engine 1 via Google Cloud SDK
+agy-gemini-notebook login --gcloud
 
 # Invoke a notebook by fuzzy title or alias and ask a grounded question
 agy-gemini-notebook invoke "System Architecture" -q "What are the latency SLAs?"
@@ -235,8 +265,8 @@ agy-gemini-notebook sync README.md docs/architecture.md
 
 | Category | MCP Tool | Engine | Description |
 | :--- | :--- | :--- | :--- |
-| **Workspace & Invocation** | `notebook_status` | Local + Dual | Show active `.agents/notebook.json` binding, `setup_ready`, and engine auth readiness |
-| | `notebook_login` | Engine 2 (RPC) | Launch an interactive Chromium browser to authenticate with Google NotebookLM and save session state |
+| **Workspace & Invocation** | `notebook_status` | Local + Dual | Show active `.agents/notebook.json` binding, `setup_ready`, engine auth readiness, and compliance notice |
+| | `notebook_login` | Dual | Import an existing system browser session (`browser_cookies="auto"`), open `notebooklm.google.com` in the OS browser, or run `gcloud auth login` (never launches Playwright on `accounts.google.com`) |
 | | `notebook_attach` | Local | Attach a default notebook (or register an `--alias`) to the workspace |
 | | `notebook_invoke` | Dual | Resolve a notebook by ID, alias, or fuzzy title, inspect sources, and optionally run a grounded query |
 | **Notebook CRUD & Sharing** | `notebook_list` | Dual | List notebooks (`v1alpha` recently viewed or RPC full list) |
@@ -262,6 +292,15 @@ agy-gemini-notebook sync README.md docs/architecture.md
 ## 📦 Versioning & Changelog
 
 This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0.4` (2026-10-22) — Google Sign-In Policy Compliance, 1-Click Local Browser Session Import & Explicit Grey-Area Alerts
+
+- **Elimination of Automated Playwright Sign-In on `accounts.google.com` (`src/agy_gemini_notebook/engines/rpc_bridge.py`, `pyproject.toml`, `scripts/setup.sh`)**:
+  - **Why**: Previously, `notebook_login` invoked `notebooklm login` without `--browser-cookies`, which spawned a Playwright-controlled Chromium browser on `accounts.google.com` using `--disable-blink-features=AutomationControlled` and `ignore_default_args=["--enable-automation"]`. Automating Google's sign-in page with stealth flags contravenes Google Identity's OAuth 2.0 "Use Secure Browsers" policy and required a 300 MB Playwright Chromium download.
+  - **How**: Switched `pyproject.toml` from `notebooklm-py[browser]` to `notebooklm-py[cookies]` (`rookie-cookies`) and refactored `NotebookRpcBridge.login()` so it **never** launches Playwright against `accounts.google.com`. Instead, it imports existing authenticated cookies from the user's real OS browser (`--browser-cookies auto|chrome|brave|firefox|edge|chromium|vivaldi|arc|safari`) in ~1 second, supports `open_system_browser=True` (via Python's `webbrowser.open("https://notebooklm.google.com/")`) so the user signs in exclusively inside their genuine system browser, and supports `gcloud=True` (`gcloud auth login`) for Engine 1.
+- **Explicit ToS & Grey-Area Compliance Notices Across UI, MCP, CLI & Docs (`rpc_bridge.py`, `mcp_server.py`, `sidecars/notebook_context_panel/ui.html`, `README.md`, `SKILL.md`, `rules/AGENTS.md`)**:
+  - **Why**: While Engine 1 (`discoveryengine.googleapis.com/v1alpha`) is 100% official Google Cloud OAuth 2.0, consumer `notebooklm.google.com` does not yet offer a public OAuth API and relies on internal `batchexecute` web RPCs (a ToS grey area). Users need transparent, prominent warnings before choosing between Engine 1 and Engine 2.
+  - **How**: Added `COMPLIANCE_NOTICE` to `notebook_status`, `notebook_login`, and `auth_required` MCP responses; added a dedicated `## ⚖️ Google Terms of Service, OAuth Policy & Dual-Engine Compliance` section to `README.md`; and added a visible **⚠️ Compliance & Grey-Area Notice** banner plus browser selector (`#cookie-browser-select`), **"🔗 Connect Session from Browser"**, **"🌐 Open notebooklm.google.com"**, and **"☁️ Google Cloud Login (`gcloud`)"** buttons to the Sidecar UI (`ui.html`), along with semantic `<header>`/`<main>` landmarks, explicit `<label for>` associations, and IME-safe `Enter` handling (`!e.isComposing`).
 
 ### `v1.0.3` (2026-10-22) — Sidecar Dark Mode Contrast Fix & Isolated `.venv` Sign-In Subprocess Resolution
 

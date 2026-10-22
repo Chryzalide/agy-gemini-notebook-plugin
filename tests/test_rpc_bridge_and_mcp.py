@@ -698,6 +698,7 @@ async def test_auth_required_graceful_response_and_login_tool(
     assert created["status"] == "auth_required"
     assert created["authenticated"] is False
     assert "notebook_login" in created["remediation"]
+    assert "compliance_notice" in created
 
     listed = await notebook_list(workspace_dir=str(tmp_path))
     assert listed["status"] == "auth_required"
@@ -706,22 +707,79 @@ async def test_auth_required_graceful_response_and_login_tool(
         self: NotebookRpcBridge,
         browser: str = "chromium",
         timeout: int = 300,
-        browser_cookies: str | None = None,
+        browser_cookies: str | None = "auto",
         account: str | None = None,
         fresh: bool = False,
+        gcloud: bool = False,
+        open_system_browser: bool = False,
     ) -> dict[str, Any]:
         return {
             "status": "authenticated",
             "authenticated": True,
             "engine": "rpc_bridge",
             "profile": "default",
-            "browser": browser,
+            "browser_cookies": browser_cookies or "auto",
+            "compliance_notice": {"grey_area_engine": "rpc_bridge"},
         }
 
     monkeypatch.setattr(NotebookRpcBridge, "login", _fake_login)
-    login_res = await notebook_login(browser="chromium", timeout=120)
+    login_res = await notebook_login(browser_cookies="auto", timeout=120)
     assert login_res["status"] == "authenticated"
     assert login_res["authenticated"] is True
+    assert login_res["browser_cookies"] == "auto"
+    assert "compliance_notice" in login_res
+
+
+@pytest.mark.asyncio
+async def test_rpc_bridge_login_modes_never_use_playwright(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify NotebookRpcBridge.login uses --browser-cookies or webbrowser.open and never launches Playwright."""
+    import webbrowser
+
+    bridge = NotebookRpcBridge()
+    opened_urls: list[str] = []
+    monkeypatch.setattr(webbrowser, "open", lambda url, new=2: opened_urls.append(url) or True)
+
+    open_res = await bridge.login(open_system_browser=True)
+    assert open_res["status"] == "browser_opened"
+    assert opened_urls == ["https://notebooklm.google.com/"]
+    assert "compliance_notice" in open_res
+
+    captured_cmds: list[tuple[str, ...]] = []
+
+    class _FakeProc:
+        returncode = 0
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            return (b"Authentication saved", b"")
+
+        def kill(self) -> None:
+            pass
+
+    async def _fake_exec(*cmd: str, **kwargs: Any) -> _FakeProc:
+        captured_cmds.append(cmd)
+        if "--storage" in cmd:
+            idx = cmd.index("--storage")
+            storage_file = Path(cmd[idx + 1])
+            storage_file.parent.mkdir(parents=True, exist_ok=True)
+            storage_file.write_text('{"cookies": []}', encoding="utf-8")
+        return _FakeProc()
+
+    import asyncio as _asyncio
+
+    import agy_gemini_notebook.engines.rpc_bridge as _rpc_mod
+
+    monkeypatch.setattr(_rpc_mod, "FALLBACK_AUTH_DIR", tmp_path / ".notebooklm-auth")
+    monkeypatch.setattr(_asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(NotebookRpcBridge, "has_saved_session", lambda self: True)
+
+    cookie_res = await bridge.login(browser_cookies="brave", account="0")
+    assert cookie_res["status"] == "authenticated"
+    assert cookie_res["browser_cookies"] == "brave"
+    assert any("--browser-cookies" in c and "brave" in c for c in captured_cmds)
+    assert all("playwright" not in " ".join(c).lower() for c in captured_cmds)
 
 
 @pytest.mark.asyncio

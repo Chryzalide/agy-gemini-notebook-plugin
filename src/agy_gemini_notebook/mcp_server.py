@@ -29,6 +29,7 @@ from agy_gemini_notebook.config import (
 )
 from agy_gemini_notebook.engines.gcp_enterprise_rest import GcpNotebookEnterpriseClient
 from agy_gemini_notebook.engines.rpc_bridge import (
+    COMPLIANCE_NOTICE,
     NotebookAuthRequiredError,
     NotebookRpcBridge,
 )
@@ -56,10 +57,12 @@ def _auth_error_response(exc: Exception, engine: str = "rpc_bridge") -> dict[str
         "engine": engine,
         "error": str(exc),
         "remediation": (
-            "Call the `notebook_login` MCP tool to open the Google sign-in browser window, "
+            "Call the `notebook_login` MCP tool (which imports your active session from your "
+            "installed browser via `--browser-cookies` without Playwright sign-in automation), "
             "run `agy-gemini-notebook login` in your terminal, or set `GCP_PROJECT_NUMBER` "
-            "with `gcloud auth login` for Google Cloud Enterprise."
+            "with `gcloud auth login` for 100% official Google Cloud Enterprise REST."
         ),
+        "compliance_notice": COMPLIANCE_NOTICE,
         "sidecar_link": SIDECAR_URI,
     }
 
@@ -178,36 +181,54 @@ async def notebook_status(workspace_dir: str | None = None) -> dict[str, Any]:
         "has_saved_session": has_session,
         "profile": bridge.profile or "default",
         "storage_path": str(resolved_storage) if resolved_storage else None,
+        "compliance_status": "unofficial_rpc_grey_area",
     }
     gcp_info = info.get("gcp_enterprise_rest") or {}
+    gcp_info["compliance_status"] = "official_google_cloud_api"
     info["setup_ready"] = bool(
         has_session or (gcp_info.get("configured") and gcp_info.get("gcloud_authenticated"))
     )
+    info["compliance_notice"] = COMPLIANCE_NOTICE
     info["sidecar_link"] = SIDECAR_URI
     return info
 
 
 @mcp.tool()
 async def notebook_login(
-    browser: str = "chromium",
-    timeout: int = 300,
-    browser_cookies: str | None = None,
+    browser_cookies: str | None = "auto",
     account: str | None = None,
+    gcloud: bool = False,
+    open_system_browser: bool = False,
+    browser: str = "auto",
+    timeout: int = 300,
     fresh: bool = False,
 ) -> dict[str, Any]:
-    """Authenticate with Google NotebookLM via an interactive browser window or browser cookie import.
+    """Connect your Gemini Notebook session without Playwright sign-in automation on `accounts.google.com`.
 
-    Call this tool when `notebook_status` reports `has_saved_session: false` or when a notebook
-    tool returns `status: 'auth_required'`.
+    - Default (`browser_cookies='auto'` or `'chrome'`, `'brave'`, `'firefox'`, `'edge'`, `'chromium'`):
+      Imports your already-signed-in `notebooklm.google.com` session directly from your installed
+      browser in ~1 second (Engine 2 — unofficial community RPC bridge).
+    - `gcloud=True`: Runs official `gcloud auth login` OAuth 2.0 flow for Google Cloud Discovery
+      Engine `v1alpha` (Engine 1 — 100% official Google Cloud API).
+    - `open_system_browser=True`: Opens `https://notebooklm.google.com/` in your genuine OS default
+      browser so you can verify you are signed in before connecting.
     """
     bridge = NotebookRpcBridge()
-    return await bridge.login(
-        browser=browser,
-        timeout=timeout,
-        browser_cookies=browser_cookies,
-        account=account,
-        fresh=fresh,
-    )
+    sig_kwargs: dict[str, Any] = {
+        "browser": browser,
+        "timeout": timeout,
+        "browser_cookies": browser_cookies,
+        "account": account,
+        "fresh": fresh,
+    }
+    import inspect
+
+    params = inspect.signature(bridge.login).parameters
+    if "gcloud" in params:
+        sig_kwargs["gcloud"] = gcloud
+    if "open_system_browser" in params:
+        sig_kwargs["open_system_browser"] = open_system_browser
+    return await bridge.login(**sig_kwargs)
 
 
 @mcp.tool()

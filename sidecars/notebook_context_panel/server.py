@@ -33,7 +33,10 @@ from agy_gemini_notebook.config import (
      resolve_workspace_dir,
     save_workspace_binding,
 )
-from agy_gemini_notebook.engines.rpc_bridge import NotebookRpcBridge
+from agy_gemini_notebook.engines.rpc_bridge import (
+    COMPLIANCE_NOTICE,
+    NotebookRpcBridge,
+)
 from agy_gemini_notebook.mcp_server import (
     _extract_notebook_id,
     _select_engine,
@@ -142,7 +145,9 @@ async def api_get_status(
         "notebooklm_py_installed": bridge.is_available(),
         "has_saved_session": bridge.has_saved_session(),
         "profile": bridge.profile or "default",
+        "compliance_status": "unofficial_rpc_grey_area",
     }
+    info["compliance_notice"] = COMPLIANCE_NOTICE
     info["workspace_docs"] = discover_workspace_docs(workspace_dir)
     return {"status": "ok", **info}
 
@@ -426,12 +431,16 @@ async def api_create_notebook(
 
 
 async def api_login_notebook(payload: dict[str, Any]) -> dict[str, Any]:
-    """Handle `POST /api/login` to launch interactive NotebookLM browser authentication."""
+    """Handle `POST /api/login` to connect session from installed browser (`--browser-cookies`) or `gcloud`."""
+    raw_cookies = payload.get("browser_cookies")
+    browser_cookies = str(raw_cookies).strip() if raw_cookies is not None else "auto"
     return await notebook_login(
-        browser=str(payload.get("browser") or "chromium"),
-        timeout=int(payload.get("timeout") or 300),
-        browser_cookies=payload.get("browser_cookies"),
+        browser_cookies=browser_cookies,
         account=payload.get("account"),
+        gcloud=bool(payload.get("gcloud", False)),
+        open_system_browser=bool(payload.get("open_system_browser", False)),
+        browser=str(payload.get("browser") or browser_cookies or "auto"),
+        timeout=int(payload.get("timeout") or 300),
         fresh=bool(payload.get("fresh", False)),
     )
 

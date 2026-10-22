@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 echo "======================================================================"
-echo " 📓 Gemini Notebook by Chryzalide — Setup Workflow (v1.0.3)"
+echo " 📓 Gemini Notebook by Chryzalide — Setup Workflow (v1.0.4)"
 echo "======================================================================"
 echo ""
 
@@ -54,19 +54,18 @@ echo "  ✓ Python package ready (${VENV_PY})"
 echo ""
 
 # -----------------------------------------------------------------------------
-# Step 2/5: Playwright Chromium Browser Check (for Engine 2 Login)
+# Step 2/5: Browser Cookie Import Extra (`rookie-cookies`) Verification
 # -----------------------------------------------------------------------------
-echo "[Step 2/5] Checking Playwright Chromium browser for Google sign-in..."
-EXISTING_CHROME="$(find "${HOME}/.cache/ms-playwright" -maxdepth 3 -name "chrome" -type f 2>/dev/null | head -n 1 || true)"
-if [[ -n "${EXISTING_CHROME}" ]]; then
-    echo "  ✓ Found installed Playwright Chromium binary (${EXISTING_CHROME})"
+echo "[Step 2/5] Checking local browser session importer (notebooklm-py[cookies])..."
+if "${VENV_PY}" -c "import rookie_cookies" >/dev/null 2>&1; then
+    echo "  ✓ Found 'rookie-cookies' (1-second browser session import ready, zero Playwright sign-in)"
 else
     if [[ "${CHECK_ONLY}" -eq 0 ]]; then
-        echo "  → Installing Playwright Chromium browser..."
-        "${PLUGIN_DIR}/.venv/bin/playwright" install chromium
-        echo "  ✓ Playwright Chromium installed"
+        echo "  → Installing 'notebooklm-py[cookies]' into ${PLUGIN_DIR}/.venv..."
+        "${PLUGIN_DIR}/.venv/bin/pip" install "notebooklm-py[cookies]>=0.1.0"
+        echo "  ✓ Browser session importer ready"
     else
-        echo "  ! Playwright Chromium not found in ~/.cache/ms-playwright (run: .venv/bin/playwright install chromium)"
+        echo "  ! 'rookie-cookies' not found (run: .venv/bin/pip install 'notebooklm-py[cookies]')"
     fi
 fi
 echo ""
@@ -107,29 +106,36 @@ print("1" if st.get("setup_ready") else "0")
 if [[ "${SETUP_READY}" == "1" && "${RUN_LOGIN}" -eq 0 ]]; then
     echo "  ✓ Authentication already configured and ready!"
 else
+    echo "  ⚠️  Compliance & Terms of Service Notice:"
+    echo "     • Engine 1 (Official Google Cloud API): Uses 'gcloud auth login' + 'GCP_PROJECT_NUMBER'"
+    echo "       against discoveryengine.googleapis.com/v1alpha (100% Google-compliant)."
+    echo "     • Engine 2 (Unofficial Grey Area): Imports your existing browser session (--browser-cookies)"
+    echo "       without Playwright automation on accounts.google.com, and queries undocumented"
+    echo "       notebooklm.google.com web RPCs. Not affiliated with Google—use at your own discretion."
+    echo ""
     if [[ "${RUN_LOGIN}" -eq 1 ]]; then
-        echo "  → Launching interactive Google NotebookLM browser sign-in..."
-        "${VENV_CLI}" login
+        echo "  → Importing active notebooklm.google.com session from your installed browser..."
+        "${VENV_CLI}" login --browser-cookies auto
     elif [[ "${CHECK_ONLY}" -eq 0 && -t 0 ]]; then
         echo "  ! No active Gemini Notebook session found yet."
         echo "    Choose an authentication method:"
-        echo "      [1] Personal / Workspace Google Account (notebooklm.google.com — opens browser)"
-        echo "      [2] Google Cloud NotebookLM Enterprise (gcloud auth login + GCP_PROJECT_NUMBER)"
-        echo "      [3] Skip for now (authenticate later from the IDE or CLI)"
+        echo "      [1] Connect Existing Browser Session (Engine 2 — --browser-cookies auto, 1s import)"
+        echo "      [2] Official Google Cloud Enterprise OAuth (Engine 1 — gcloud auth login + GCP_PROJECT_NUMBER)"
+        echo "      [3] Skip for now (connect later from the Sidecar UI or CLI)"
         read -r -p "    Select [1/2/3] (default: 1): " AUTH_CHOICE
         AUTH_CHOICE="${AUTH_CHOICE:-1}"
         if [[ "${AUTH_CHOICE}" == "1" ]]; then
-            "${VENV_CLI}" login
+            "${VENV_CLI}" login --browser-cookies auto
         elif [[ "${AUTH_CHOICE}" == "2" ]]; then
-            echo "    Run: export GCP_PROJECT_NUMBER=\"YOUR_PROJECT_NUMBER\" && gcloud auth login"
+            "${VENV_CLI}" login --gcloud
         else
             echo "    Skipped authentication (run './scripts/setup.sh --login' or '.venv/bin/agy-gemini-notebook login' anytime)."
         fi
     else
         echo "  ! Authentication not yet completed."
-        echo "    To sign in with your Google account, run:"
+        echo "    To connect your active browser session in 1 second, run:"
         echo "      ${VENV_CLI} login"
-        echo "    Or click '🔑 Sign In to Google NotebookLM' inside the Sidecar panel."
+        echo "    Or click '🔗 Connect Session from Browser' inside the Sidecar panel."
     fi
 fi
 echo ""
@@ -147,6 +153,6 @@ echo "    1. Reload or restart Antigravity 2 once so the Sidecar UI server"
 echo "       ('Gemini Notebook by Chryzalide') and MCP server reload."
 echo "    2. Open 'Overview -> Plugins -> Gemini Notebook by Chryzalide'"
 echo "       (or click the sidecar pill link in chat)."
-echo "    3. If not signed in yet, click '🔑 Sign In to Google NotebookLM'"
+echo "    3. If not connected yet, click '🔗 Connect Session from Browser'"
 echo "       or run: .venv/bin/agy-gemini-notebook login"
 echo "======================================================================"

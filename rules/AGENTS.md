@@ -4,7 +4,7 @@ When this plugin (`gemini-notebook` / **Gemini Notebook by Chryzalide**) is enab
 
 1. **First-Time Setup & Workspace Notebook Awareness**:
    - Check if the active workspace contains a `.agents/notebook.json` binding (or call `notebook_status` / `notebook_invoke` from `gemini_notebook_mcp`).
-   - If `notebook_status` reports `setup_ready: false` (or a tool returns `status: "auth_required"`), guide the user through the setup workflow by calling `notebook_login` (or running `./scripts/setup.sh --login` / `agy-gemini-notebook setup --login`).
+   - If `notebook_status` reports `setup_ready: false` (or a tool returns `status: "auth_required"`), guide the user through the setup workflow by calling `notebook_login(browser_cookies="auto")` for Engine 2 (imports active browser session without Playwright sign-in automation; note the unofficial RPC grey-area disclaimer) or `notebook_login(gcloud=True)` + `GCP_PROJECT_NUMBER` for Engine 1 (100% official Google Cloud API).
    - When a Gemini Notebook is attached to the workspace and the user asks architectural, domain, specification, or research questions, prioritize querying the attached notebook (`notebook_query` or `notebook_search_sources`) before making assumptions.
    - When the user asks to "invoke" a notebook by name, alias, or ID, call `notebook_invoke`.
 

@@ -18,6 +18,7 @@ import asyncio
 import os
 import shutil
 import sys
+import webbrowser
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -27,6 +28,19 @@ from agy_gemini_notebook.config import PluginConfig
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 FALLBACK_AUTH_DIR = PLUGIN_ROOT / ".notebooklm-auth"
+NOTEBOOKLM_WEB_URL = "https://notebooklm.google.com/"
+
+COMPLIANCE_NOTICE = (
+    "Compliance & Terms of Service Notice: "
+    "Engine 1 (`gcp_enterprise_rest` via `gcloud auth login` + `GCP_PROJECT_NUMBER`) uses the "
+    "100% official Google Cloud Discovery Engine v1alpha REST API. "
+    "Engine 2 (`rpc_bridge` via `notebooklm-py`) is an unofficial community bridge for "
+    "`notebooklm.google.com` that imports your existing local browser session (`--browser-cookies`, "
+    "without launching an automated Playwright browser on `accounts.google.com`). "
+    "Because `notebooklm.google.com` does not offer a public OAuth API, Engine 2 relies on "
+    "undocumented web RPCs (Terms of Service grey area—use at your own discretion, avoid high-frequency "
+    "automated scraping, and prefer Engine 1 for strict enterprise compliance)."
+)
 
 
 class NotebookAuthRequiredError(RuntimeError):
@@ -189,53 +203,73 @@ class NotebookRpcBridge:
                     return str(cand)
         return sys.executable
 
-    @staticmethod
-    def _prepare_playwright_browsers_env(env: dict[str, str] | None = None) -> str | None:
-        """Bridge existing `~/.cache/ms-playwright/chromium-*` builds if Playwright's expected revision is missing."""
-        target_env = env if env is not None else os.environ
-        if target_env.get("PLAYWRIGHT_BROWSERS_PATH"):
-            return target_env.get("PLAYWRIGHT_BROWSERS_PATH")
-        with suppress(Exception):
-            from playwright.sync_api import sync_playwright
-
-            with sync_playwright() as pw:
-                expected_exec = Path(pw.chromium.executable_path)
-            if expected_exec.is_file():
-                return str(expected_exec.parent.parent.parent)
-
-            ms_cache = Path.home() / ".cache" / "ms-playwright"
-            if not ms_cache.is_dir():
-                return None
-            existing_revs = sorted(
-                [
-                    d
-                    for d in ms_cache.glob("chromium-*")
-                    if d.is_dir() and (d / "chrome-linux64" / "chrome").is_file()
-                ],
-                reverse=True,
-            )
-            if not existing_revs:
-                return None
-
-            expected_rev_name = expected_exec.parent.parent.name
-            bridge_dir = FALLBACK_AUTH_DIR / "playwright-browsers"
-            bridge_dir.mkdir(parents=True, exist_ok=True)
-            target_link = bridge_dir / expected_rev_name
-            if not target_link.exists():
-                target_link.symlink_to(existing_revs[0])
-            target_env["PLAYWRIGHT_BROWSERS_PATH"] = str(bridge_dir)
-            return str(bridge_dir)
-        return None
-
     async def login(
         self,
-        browser: str = "chromium",
+        browser: str = "auto",
         timeout: int = 300,
-        browser_cookies: str | None = None,
+        browser_cookies: str | None = "auto",
         account: str | None = None,
         fresh: bool = False,
+        gcloud: bool = False,
+        open_system_browser: bool = False,
     ) -> dict[str, Any]:
-        """Authenticate with Google NotebookLM via interactive browser login or browser cookie import."""
+        """Authenticate without automated Playwright sign-in on `accounts.google.com`.
+
+        Modes:
+        1. `open_system_browser=True`: Opens `https://notebooklm.google.com/` in the user's genuine
+           OS default browser (`webbrowser.open`, zero Playwright / zero automation flags) so the
+           user can verify their normal Google session before importing cookies.
+        2. `gcloud=True`: Runs official `gcloud auth login` OAuth 2.0 flow for Engine 1
+           (`gcp_enterprise_rest` — 100% Google Cloud compliant).
+        3. Default (`browser_cookies='auto'` or specific browser name such as `'chrome'`, `'brave'`,
+           `'firefox'`, `'edge'`, `'chromium'`): Imports existing session cookies from the user's
+           installed browser via `notebooklm login --browser-cookies <source>` without launching
+           Playwright or automating `accounts.google.com`.
+        """
+        if open_system_browser:
+            opened = await asyncio.to_thread(webbrowser.open, NOTEBOOKLM_WEB_URL)
+            return {
+                "status": "browser_opened",
+                "opened": bool(opened),
+                "url": NOTEBOOKLM_WEB_URL,
+                "message": (
+                    "Opened https://notebooklm.google.com/ in your system browser. "
+                    "Once signed in there, click 'Connect Session from Browser' (or run "
+                    "`agy-gemini-notebook login`) to link your session in 1 second."
+                ),
+                "compliance_notice": COMPLIANCE_NOTICE,
+            }
+
+        if gcloud:
+            proc = await asyncio.create_subprocess_exec(
+                "gcloud",
+                "auth",
+                "login",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout_b, stderr_b = await proc.communicate()
+            out_txt = stdout_b.decode("utf-8", errors="replace").strip()
+            err_txt = stderr_b.decode("utf-8", errors="replace").strip()
+            if proc.returncode == 0:
+                return {
+                    "status": "authenticated",
+                    "authenticated": True,
+                    "engine": "gcp_enterprise_rest",
+                    "auth_method": "gcloud_oauth2",
+                    "output": out_txt or err_txt,
+                    "compliance_notice": COMPLIANCE_NOTICE,
+                }
+            return {
+                "status": "login_failed",
+                "authenticated": False,
+                "engine": "gcp_enterprise_rest",
+                "auth_method": "gcloud_oauth2",
+                "return_code": proc.returncode,
+                "error": err_txt or out_txt or "`gcloud auth login` did not complete.",
+                "compliance_notice": COMPLIANCE_NOTICE,
+            }
+
         if not self.is_available():
             raise RuntimeError(
                 "Optional dependency `notebooklm-py` is not installed. "
@@ -246,6 +280,12 @@ class NotebookRpcBridge:
         fallback_storage = FALLBACK_AUTH_DIR / "profiles" / prof / "storage_state.json"
         fallback_storage.parent.mkdir(parents=True, exist_ok=True)
 
+        # Resolve cookie source from `browser_cookies` or `browser` without launching Playwright
+        cookie_source = (browser_cookies or "").strip()
+        if not cookie_source:
+            cleaned_browser = (browser or "auto").strip()
+            cookie_source = cleaned_browser if cleaned_browser else "auto"
+
         python_exe = self._resolve_python_executable()
         cmd = [
             python_exe,
@@ -254,17 +294,12 @@ class NotebookRpcBridge:
             "--storage",
             str(fallback_storage),
             "login",
-            "--browser-timeout",
-            str(timeout),
+            "--browser-cookies",
+            cookie_source,
         ]
-        if browser_cookies:
-            cmd.extend(["--browser-cookies", browser_cookies])
-            if account:
-                cmd.extend(["--account", account])
-        else:
-            cmd.extend(["--browser", browser])
-        if fresh:
-            cmd.append("--fresh")
+        if account:
+            cmd.extend(["--account", account])
+        _ = (timeout, fresh)
 
         env = dict(os.environ)
         env["NOTEBOOKLM_HOME"] = str(FALLBACK_AUTH_DIR)
@@ -279,9 +314,6 @@ class NotebookRpcBridge:
         venv_bin = PLUGIN_ROOT / ".venv" / "bin"
         if venv_bin.is_dir():
             env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
-
-        if not browser_cookies and browser == "chromium":
-            await asyncio.to_thread(self._prepare_playwright_browsers_env, env)
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -305,17 +337,27 @@ class NotebookRpcBridge:
                 "status": "authenticated",
                 "authenticated": True,
                 "engine": "rpc_bridge",
+                "auth_method": f"browser_cookies:{cookie_source}",
+                "browser_cookies": cookie_source,
                 "profile": prof,
                 "storage_path": str(self.resolve_storage_path() or fallback_storage),
                 "output": stdout_text,
+                "compliance_notice": COMPLIANCE_NOTICE,
             }
 
+        raw_err = stderr_text or stdout_text or "Could not import an active session from your browser."
         return {
             "status": "login_failed",
             "authenticated": self.has_saved_session(),
             "engine": "rpc_bridge",
+            "auth_method": f"browser_cookies:{cookie_source}",
             "return_code": proc.returncode,
-            "error": stderr_text or stdout_text or "NotebookLM login did not complete.",
+            "error": (
+                f"{raw_err}\n\n"
+                "Tip: Make sure you are signed in to https://notebooklm.google.com/ in your "
+                "regular browser (Chrome, Brave, Firefox, Edge, Chromium), then try again."
+            ),
+            "compliance_notice": COMPLIANCE_NOTICE,
         }
 
     @asynccontextmanager

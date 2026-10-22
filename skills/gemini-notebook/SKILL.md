@@ -11,7 +11,7 @@ Use this skill whenever the user mentions **Gemini Notebook**, **NotebookLM**, *
 
 ### 1. Invoke, Authenticate & Bind Workspace Notebooks
 - `notebook_status`: Check which notebook(s) are currently bound to the workspace (`.agents/notebook.json`) and check authentication status for both Engine 1 (`gcp_enterprise_rest`) and Engine 2 (`rpc_bridge`).
-- `notebook_login`: Authenticate with Google NotebookLM via an interactive browser window or browser cookie import when `has_saved_session` is `false` or when a tool returns `status: "auth_required"`.
+- `notebook_login`: Connect your Gemini Notebook session without Playwright sign-in automation on `accounts.google.com`. By default (`browser_cookies="auto"` or `"chrome"`, `"brave"`, `"firefox"`, `"edge"`, `"chromium"`), imports your active `notebooklm.google.com` session from your installed browser in ~1 second (Engine 2 — unofficial community RPC bridge). Set `gcloud=True` to run official `gcloud auth login` OAuth 2.0 for Google Cloud Discovery Engine `v1alpha` (Engine 1 — 100% official Google Cloud API), or `open_system_browser=True` to open `https://notebooklm.google.com/` in your genuine OS browser.
 - `notebook_invoke`: High-level tool to invoke a notebook by ID, workspace alias (e.g. `"architecture"`, `"research"`), or fuzzy notebook title. Optionally pass `question` to immediately ask a grounded question and retrieve inline citations.
 - `notebook_attach`: Bind a `notebook_id` (and optional `alias` and `active_source_ids`) to the current workspace in `.agents/notebook.json`.
 - `notebook_list`: List available notebooks (with optional `query` title filter) via Google Cloud Discovery Engine `v1alpha` or RPC bridge.
@@ -47,9 +47,9 @@ Use this skill whenever the user mentions **Gemini Notebook**, **NotebookLM**, *
 ### Workflow 0: First-Time Installation, Setup & Authentication
 When the user installs **Gemini Notebook by Chryzalide** or asks to set up / configure the plugin:
 1. **Check Environment Readiness**: Call `notebook_status` (or run `agy-gemini-notebook setup`).
-2. **Authenticate Engine**:
-   - **Engine 2 (`notebooklm.google.com` Personal / Workspace Account)**: Call `notebook_login` (or instruct the user to run `./scripts/setup.sh --login` / `.venv/bin/agy-gemini-notebook login` or click **"🔑 Sign In to Google NotebookLM"** in the Sidecar panel).
-   - **Engine 1 (Google Cloud NotebookLM Enterprise `v1alpha`)**: Set `GCP_PROJECT_NUMBER` and authenticate via `gcloud auth login`.
+2. **Authenticate Engine (Compliance-Aware)**:
+   - **Engine 1 (100% Official Google Cloud API — `v1alpha` Discovery Engine)**: Set `GCP_PROJECT_NUMBER` and authenticate via `gcloud auth login` (or `notebook_login(gcloud=True)`). Fully compliant with Google Cloud & OAuth 2.0 policies.
+   - **Engine 2 (Unofficial Community RPC Bridge — `notebooklm.google.com` Grey Area)**: Call `notebook_login(browser_cookies="auto")` (or instruct the user to run `./scripts/setup.sh --login` / `.venv/bin/agy-gemini-notebook login` or click **"🔗 Connect Session from Browser"** in the Sidecar panel). This imports the user's existing local browser session in ~1 second without launching a Playwright browser on `accounts.google.com`. Remind the user that Engine 2 calls undocumented `notebooklm.google.com` web RPCs (Terms of Service grey area—use at their own discretion).
 3. **Bind or Create a Workspace Notebook**: Call `notebook_list` and `notebook_attach`, or `notebook_create(title="...", attach_to_workspace=True)`.
 4. **Open Sidecar UI**: Surface `[Gemini Notebook by Chryzalide](sidecar://gemini-notebook/notebook_context_panel/ui.html)` (note: after a fresh plugin install, remind the user to reload/restart Antigravity 2 once so the Sidecar server starts).
 

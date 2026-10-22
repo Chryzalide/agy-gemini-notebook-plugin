@@ -269,7 +269,7 @@ def test_sidecar_http_lifecycle_and_endpoints(
 
 
 def test_sidecar_ui_uses_namespaced_theme_tokens_and_venv_python() -> None:
-    """Ensure ui.html avoids shadcn `--muted` collisions and rpc_bridge resolves .venv python."""
+    """Ensure ui.html avoids shadcn `--muted` collisions, exposes v1.0.4 compliance alerts, and resolves .venv python."""
     from agy_gemini_notebook.engines.rpc_bridge import NotebookRpcBridge
 
     ui_html = (SERVER_PATH.parent / "ui.html").read_text(encoding="utf-8")
@@ -278,9 +278,19 @@ def test_sidecar_ui_uses_namespaced_theme_tokens_and_venv_python() -> None:
     assert "--nb-heading:" in ui_html
     assert "var(--muted)" not in ui_html
     assert "prefers-color-scheme: light" not in ui_html
+    assert "Dual-Engine v1.0.4" in ui_html
+    assert 'id="cookie-browser-select"' in ui_html
+    assert 'id="login-rpc-btn"' in ui_html
+    assert 'id="open-browser-btn"' in ui_html
+    assert 'id="login-gcloud-btn"' in ui_html
+    assert "compliance-alert" in ui_html
+    assert "Compliance &amp; Grey-Area Notice" in ui_html
+    assert '<main id="main-content">' in ui_html
+    assert "!e.isComposing" in ui_html
 
     resolved_py = NotebookRpcBridge._resolve_python_executable()
     venv_py = REPO_ROOT / ".venv" / "bin" / "python"
     if venv_py.is_file():
         assert Path(resolved_py).resolve() == venv_py.resolve()
+
 
