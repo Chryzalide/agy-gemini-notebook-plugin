@@ -54,6 +54,7 @@ Our technical investigation revealed two complementary APIs that this plugin uni
 ```text
 agy-gemini-notebook-plugin/
 ├── AGENTS.md                        # This architectural briefing for Antigravity 2
+├── next-steps.md                    # Detailed implementation & testing checklist
 ├── README.md                        # Public open-source documentation
 ├── LICENSE                          # MIT License
 ├── pyproject.toml                   # Python package & MCP server entrypoint
@@ -84,14 +85,12 @@ agy-gemini-notebook-plugin/
 
 ## 4. Next Development Steps (Roadmap)
 
-1. **Test & Refine `gcp_enterprise_rest.py`**:
-   - Add unit tests with `pytest` and `httpx.MockTransport` verifying all `v1alpha` REST calls (`create`, `listRecentlyViewed`, `batchCreate`, `uploadFile`, `audioOverviews`).
-2. **Complete `rpc_bridge.py`**:
-   - Wire `notebooklm-py` async client calls for `query_notebook` (grounded Q&A with citations) and `get_source_text`, plus an auth helper CLI (`agy-notebook-auth`).
-3. **Enhance Sidecar UI (`sidecars/notebook_context_panel/`)**:
-   - Connect `ui.html` and `server.py` to read/write `.agents/notebook.json` and call the Python backend so users can visually pick a notebook and check/uncheck sources in Antigravity 2's side panel.
-4. **Local Plugin Symlink & E2E Testing in Antigravity 2**:
-   - Link the repo into `~/.gemini/config/plugins/gemini-notebook` or `.agents/plugins/gemini-notebook` and test all MCP tools live.
+See **`next-steps.md`** at the repository root for the detailed task-by-task implementation and testing checklist:
+1. **Complete Dual-Engine Fallback (`rpc_bridge.py` & `mcp_server.py`)**
+2. **Make the Sidecar UI Panel Interactive (`sidecars/notebook_context_panel/`)**
+3. **Dependency Setup, Linting & Unit Test Suite (`tests/`)**
+4. **Real-World Integration & Staging Validation (`staging` $\rightarrow$ `main`)**
+
 
 ---
 
