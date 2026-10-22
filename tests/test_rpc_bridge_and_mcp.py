@@ -675,6 +675,56 @@ async def test_mcp_resources_prompts_and_cli_dispatch(
 
 
 @pytest.mark.asyncio
+async def test_auth_required_graceful_response_and_login_tool(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify that missing RPC session returns structured `status == 'auth_required'` instead of crashing MCP."""
+    from agy_gemini_notebook.engines.rpc_bridge import NotebookAuthRequiredError
+    from agy_gemini_notebook.mcp_server import notebook_login
+
+    @asynccontextmanager
+    async def _unauth_open_client(self: NotebookRpcBridge):
+        raise NotebookAuthRequiredError("No authenticated Gemini Notebook session found.")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(NotebookRpcBridge, "_open_client", _unauth_open_client)
+    monkeypatch.delenv("GCP_PROJECT_NUMBER", raising=False)
+
+    created = await notebook_create(
+        title="Should Return Auth Required",
+        workspace_dir=str(tmp_path),
+    )
+    assert created["status"] == "auth_required"
+    assert created["authenticated"] is False
+    assert "notebook_login" in created["remediation"]
+
+    listed = await notebook_list(workspace_dir=str(tmp_path))
+    assert listed["status"] == "auth_required"
+
+    async def _fake_login(
+        self: NotebookRpcBridge,
+        browser: str = "chromium",
+        timeout: int = 300,
+        browser_cookies: str | None = None,
+        account: str | None = None,
+        fresh: bool = False,
+    ) -> dict[str, Any]:
+        return {
+            "status": "authenticated",
+            "authenticated": True,
+            "engine": "rpc_bridge",
+            "profile": "default",
+            "browser": browser,
+        }
+
+    monkeypatch.setattr(NotebookRpcBridge, "login", _fake_login)
+    login_res = await notebook_login(browser="chromium", timeout=120)
+    assert login_res["status"] == "authenticated"
+    assert login_res["authenticated"] is True
+
+
+@pytest.mark.asyncio
 async def test_mcp_stdio_server_handshake() -> None:
     """Verify the portable `scripts/run_mcp.sh` launcher over live MCP stdio JSON-RPC."""
     from mcp import ClientSession, StdioServerParameters
@@ -690,7 +740,7 @@ async def test_mcp_stdio_server_handshake() -> None:
         assert init.server_info.name == "gemini_notebook_mcp"
 
         tools = await session.list_tools()
-        assert len(tools.tools) == 20
+        assert len(tools.tools) == 21
 
         prompts = await session.list_prompts()
         assert len(prompts.prompts) == 2
@@ -700,6 +750,3 @@ async def test_mcp_stdio_server_handshake() -> None:
 
         status_res = await session.call_tool("notebook_status", {})
         assert not status_res.is_error
-
-
-

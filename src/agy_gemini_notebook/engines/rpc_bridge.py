@@ -14,12 +14,24 @@ Why this engine exists alongside `gcp_enterprise_rest.py`:
 
 from __future__ import annotations
 
+import asyncio
+import os
+import shutil
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
 from agy_gemini_notebook.config import PluginConfig
+
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+FALLBACK_AUTH_DIR = PLUGIN_ROOT / ".notebooklm-auth"
+
+
+class NotebookAuthRequiredError(RuntimeError):
+    """Raised when no authenticated NotebookLM or GCP Enterprise session is available."""
+
 
 
 def _serialize_source(src: Any) -> dict[str, Any]:
@@ -117,31 +129,157 @@ class NotebookRpcBridge:
         except ImportError:
             return False
 
+    def resolve_storage_path(self) -> Path | None:
+        """Return the first existing `storage_state.json` path across user home and plugin fallback."""
+        if self.storage_path:
+            explicit = Path(self.storage_path).expanduser()
+            if explicit.is_file():
+                return explicit
+
+        prof = self.profile or "default"
+        candidates: list[Path] = []
+        if self.is_available():
+            with suppress(Exception):
+                from notebooklm.paths import get_storage_path
+
+                p = get_storage_path(profile=self.profile) if self.profile else get_storage_path()
+                candidates.append(Path(p))
+
+        default_home = Path(os.environ.get("NOTEBOOKLM_HOME", "~/.notebooklm")).expanduser()
+        candidates.extend(
+            [
+                default_home / "profiles" / prof / "storage_state.json",
+                default_home / "storage_state.json",
+                FALLBACK_AUTH_DIR / "profiles" / prof / "storage_state.json",
+                FALLBACK_AUTH_DIR / "storage_state.json",
+            ]
+        )
+        for cand in candidates:
+            with suppress(OSError):
+                if cand.is_file():
+                    return cand
+        return None
+
     def has_saved_session(self) -> bool:
         """Check whether a saved `notebooklm` authentication state exists on disk or in env."""
-        import os
-
         if os.environ.get("NOTEBOOKLM_AUTH_JSON"):
             return True
-        if self.storage_path and Path(self.storage_path).expanduser().is_file():
-            return True
-        if not self.is_available():
+        if not self.is_available() and not self.storage_path:
             return False
-        try:
-            from notebooklm.paths import get_storage_path
+        return self.resolve_storage_path() is not None
 
-            path = (
-                get_storage_path(profile=self.profile)
-                if self.profile
-                else get_storage_path()
+    @staticmethod
+    def _prepare_playwright_browsers_env(env: dict[str, str]) -> None:
+        """Bridge existing `~/.cache/ms-playwright/chromium-*` builds if Playwright's expected revision is missing."""
+        if env.get("PLAYWRIGHT_BROWSERS_PATH"):
+            return
+        with suppress(Exception):
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as pw:
+                expected_exec = Path(pw.chromium.executable_path)
+            if expected_exec.is_file():
+                return
+
+            ms_cache = Path.home() / ".cache" / "ms-playwright"
+            if not ms_cache.is_dir():
+                return
+            existing_revs = sorted(
+                [
+                    d
+                    for d in ms_cache.glob("chromium-*")
+                    if d.is_dir() and (d / "chrome-linux64" / "chrome").is_file()
+                ],
+                reverse=True,
             )
-            return Path(path).is_file()
-        except Exception:  # noqa: BLE001
-            default_home = Path(os.environ.get("NOTEBOOKLM_HOME", "~/.notebooklm")).expanduser()
-            return (
-                (default_home / "storage_state.json").is_file()
-                or (default_home / "profiles" / (self.profile or "default") / "storage_state.json").is_file()
+            if not existing_revs:
+                return
+
+            expected_rev_name = expected_exec.parent.parent.name
+            bridge_dir = FALLBACK_AUTH_DIR / "playwright-browsers"
+            bridge_dir.mkdir(parents=True, exist_ok=True)
+            target_link = bridge_dir / expected_rev_name
+            if not target_link.exists():
+                target_link.symlink_to(existing_revs[0])
+            env["PLAYWRIGHT_BROWSERS_PATH"] = str(bridge_dir)
+
+    async def login(
+        self,
+        browser: str = "chromium",
+        timeout: int = 300,
+        browser_cookies: str | None = None,
+        account: str | None = None,
+        fresh: bool = False,
+    ) -> dict[str, Any]:
+        """Authenticate with Google NotebookLM via interactive browser login or browser cookie import."""
+        if not self.is_available():
+            raise RuntimeError(
+                "Optional dependency `notebooklm-py` is not installed. "
+                "Install it with `pip install -e '.[rpc]'`."
             )
+
+        prof = self.profile or "default"
+        fallback_storage = FALLBACK_AUTH_DIR / "profiles" / prof / "storage_state.json"
+        fallback_storage.parent.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "notebooklm",
+            "--storage",
+            str(fallback_storage),
+            "login",
+            "--browser-timeout",
+            str(timeout),
+        ]
+        if browser_cookies:
+            cmd.extend(["--browser-cookies", browser_cookies])
+            if account:
+                cmd.extend(["--account", account])
+        else:
+            cmd.extend(["--browser", browser])
+        if fresh:
+            cmd.append("--fresh")
+
+        env = dict(os.environ)
+        env["NOTEBOOKLM_HOME"] = str(FALLBACK_AUTH_DIR)
+        if not browser_cookies and browser == "chromium":
+            await asyncio.to_thread(self._prepare_playwright_browsers_env, env)
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        stdout_bytes, stderr_bytes = await proc.communicate()
+        stdout_text = stdout_bytes.decode("utf-8", errors="replace").strip()
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+
+        if proc.returncode == 0 and fallback_storage.is_file():
+            with suppress(OSError):
+                user_home_storage = (
+                    Path.home() / ".notebooklm" / "profiles" / prof / "storage_state.json"
+                )
+                user_home_storage.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                shutil.copy2(fallback_storage, user_home_storage)
+
+            return {
+                "status": "authenticated",
+                "authenticated": True,
+                "engine": "rpc_bridge",
+                "profile": prof,
+                "storage_path": str(self.resolve_storage_path() or fallback_storage),
+                "output": stdout_text,
+            }
+
+        return {
+            "status": "login_failed",
+            "authenticated": self.has_saved_session(),
+            "engine": "rpc_bridge",
+            "return_code": proc.returncode,
+            "error": stderr_text or stdout_text or "NotebookLM login did not complete.",
+        }
 
     @asynccontextmanager
     async def _open_client(self) -> AsyncIterator[Any]:
@@ -150,25 +288,35 @@ class NotebookRpcBridge:
             raise RuntimeError(
                 "Optional dependency `notebooklm-py` is not installed. "
                 "Install it with `pip install -e '.[rpc]'` (or `uv sync --extra rpc`) "
-                "and run `notebooklm login`."
+                "and run `agy-gemini-notebook login`."
             )
         from notebooklm import NotebookLMClient
 
         kwargs: dict[str, Any] = {}
+        resolved_storage = self.resolve_storage_path()
         if self.storage_path:
             kwargs["path"] = self.storage_path
-        if self.profile:
+        elif resolved_storage is not None:
+            kwargs["path"] = str(resolved_storage)
+        if self.profile and "path" not in kwargs:
             kwargs["profile"] = self.profile
 
-        ctx = NotebookLMClient.from_storage(**kwargs)
-        if hasattr(ctx, "__aenter__"):
-            async with ctx as client:
-                yield client
-        else:
-            # Support coroutine-returning mocks or legacy v0.4 `from_storage()`
-            resolved = await ctx
-            async with resolved as client:
-                yield client
+        try:
+            ctx = NotebookLMClient.from_storage(**kwargs)
+            if hasattr(ctx, "__aenter__"):
+                async with ctx as client:
+                    yield client
+            else:
+                # Support coroutine-returning mocks or legacy v0.4 `from_storage()`
+                resolved = await ctx
+                async with resolved as client:
+                    yield client
+        except FileNotFoundError as exc:
+            raise NotebookAuthRequiredError(
+                "No authenticated Gemini Notebook (NotebookLM) session found. "
+                "Call the `notebook_login` MCP tool, run `agy-gemini-notebook login` in your terminal, "
+                "or set `GCP_PROJECT_NUMBER` with `gcloud auth login` for Google Cloud Enterprise."
+            ) from exc
 
     # -------------------------------------------------------------------------
     # Notebooks CRUD & Metadata

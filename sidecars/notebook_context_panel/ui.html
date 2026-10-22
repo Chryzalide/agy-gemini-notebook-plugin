@@ -515,6 +515,9 @@
         <span id="rpc-engine-badge" class="badge">Checking…</span>
       </div>
     </div>
+    <button id="login-rpc-btn" class="btn primary" type="button" style="display: none;">
+      🔑 Sign In to Google NotebookLM
+    </button>
   </div>
 
   <!-- 2. Active Workspace Notebook & 1-Click Switcher -->
@@ -616,6 +619,7 @@
       gcpBadge: document.getElementById("gcp-engine-badge"),
       rpcSub: document.getElementById("rpc-engine-sub"),
       rpcBadge: document.getElementById("rpc-engine-badge"),
+      loginRpcBtn: document.getElementById("login-rpc-btn"),
       bindingBadge: document.getElementById("binding-status-badge"),
       activeTitle: document.getElementById("active-notebook-title"),
       activeId: document.getElementById("active-notebook-id"),
@@ -677,14 +681,17 @@
         els.rpcBadge.textContent = "Authenticated";
         els.rpcBadge.className = "badge ok";
         els.rpcSub.textContent = `Profile: ${rpc.profile || "default"} • Grounded Q&A ready`;
+        els.loginRpcBtn.style.display = "none";
       } else if (rpc.notebooklm_py_installed) {
         els.rpcBadge.textContent = "Login Needed";
         els.rpcBadge.className = "badge warn";
-        els.rpcSub.textContent = "Run `notebooklm login` to authenticate session";
+        els.rpcSub.textContent = "Click 'Sign In' below or run `agy-gemini-notebook login`";
+        els.loginRpcBtn.style.display = "inline-flex";
       } else {
         els.rpcBadge.textContent = "Unavailable";
         els.rpcBadge.className = "badge err";
         els.rpcSub.textContent = "Install notebooklm-py (`uv sync --extra rpc`)";
+        els.loginRpcBtn.style.display = "none";
       }
     }
 
@@ -998,6 +1005,29 @@
       }
     }
 
+    async function handleRpcLogin() {
+      els.loginRpcBtn.disabled = true;
+      els.loginRpcBtn.textContent = "⏳ Opening Google Sign-In Browser…";
+      showToast("Complete Google sign-in in the browser window that just opened.", "ok");
+      try {
+        const res = await fetchJson("/api/login", {
+          method: "POST",
+          body: JSON.stringify({ browser: "chromium", timeout: 300 }),
+        });
+        if (res.status === "authenticated" || res.authenticated) {
+          showToast("Authenticated with Google NotebookLM!", "ok");
+          await refreshAll();
+        } else {
+          showToast(res.error || "Sign-in did not complete.", "err");
+        }
+      } catch (err) {
+        showToast(`Sign-in failed: ${err.message}`, "err");
+      } finally {
+        els.loginRpcBtn.disabled = false;
+        els.loginRpcBtn.textContent = "🔑 Sign In to Google NotebookLM";
+      }
+    }
+
     async function handleCreateNotebook() {
       const title = (els.createInput.value || "").trim();
       if (!title) {
@@ -1014,6 +1044,10 @@
             engine: state.engine,
           }),
         });
+        if (res.status === "auth_required") {
+          showToast("Authentication required: click 'Sign In to Google NotebookLM' above first.", "err");
+          return;
+        }
         els.createInput.value = "";
         showToast(`Created & attached "${res.notebook.title}"`, "ok");
         await refreshAll();
@@ -1045,6 +1079,10 @@
             engine: state.engine,
           }),
         });
+        if (res.status === "auth_required") {
+          showToast("Authentication required: click 'Sign In to Google NotebookLM' above first.", "err");
+          return;
+        }
         const count = Array.isArray(res.uploaded) ? res.uploaded.length : 0;
         showToast(`Synced ${count} workspace file(s) to notebook`, "ok");
         await loadActiveNotebookSources(state.attachedNotebook.notebook_id);
@@ -1057,6 +1095,7 @@
     }
 
     els.refreshBtn.addEventListener("click", refreshAll);
+    els.loginRpcBtn.addEventListener("click", handleRpcLogin);
     els.engineSelect.addEventListener("change", () => {
       state.engine = els.engineSelect.value;
       refreshAll();

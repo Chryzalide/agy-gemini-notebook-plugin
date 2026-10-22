@@ -1,6 +1,6 @@
 # 📓 agy-gemini-notebook-plugin
 
-![Version](https://img.shields.io/badge/version-v1.0-blue)
+![Version](https://img.shields.io/badge/version-v1.0.1-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
@@ -83,7 +83,7 @@ flowchart LR
     end
 
     subgraph Server["agy-gemini-notebook-plugin"]
-        MCP["FastMCP / MCPServer (20 Tools + Resources + Prompts)"]
+        MCP["FastMCP / MCPServer (21 Tools + Resources + Prompts)"]
     end
 
     subgraph GCP["Engine 1: Official GCP API (v1alpha REST)"]
@@ -116,10 +116,10 @@ uv sync --all-extras
 ### 2. Configure Authentication
 
 #### Option A: Personal Google Account (`notebooklm.google.com` — Engine 2)
-Authenticate your `notebooklm-py` session once:
+Authenticate your `notebooklm-py` session once (via CLI, MCP tool `notebook_login`, or the Sidecar UI button):
 
 ```bash
-.venv/bin/notebooklm login
+.venv/bin/agy-gemini-notebook login
 ```
 
 #### Option B: NotebookLM Enterprise (Official Google Cloud `v1alpha` API — Engine 1)
@@ -169,6 +169,9 @@ Use the CLI from any terminal or agent shell tool:
 # Check engine auth and active workspace binding
 agy-gemini-notebook status
 
+# Authenticate Google NotebookLM browser session
+agy-gemini-notebook login
+
 # Invoke a notebook by fuzzy title or alias and ask a grounded question
 agy-gemini-notebook invoke "System Architecture" -q "What are the latency SLAs?"
 
@@ -187,6 +190,7 @@ agy-gemini-notebook sync README.md docs/architecture.md
 | Category | MCP Tool | Engine | Description |
 | :--- | :--- | :--- | :--- |
 | **Workspace & Invocation** | `notebook_status` | Local + Dual | Show active `.agents/notebook.json` binding and engine auth readiness |
+| | `notebook_login` | Engine 2 (RPC) | Launch an interactive Chromium browser to authenticate with Google NotebookLM and save session state |
 | | `notebook_attach` | Local | Attach a default notebook (or register an `--alias`) to the workspace |
 | | `notebook_invoke` | Dual | Resolve a notebook by ID, alias, or fuzzy title, inspect sources, and optionally run a grounded query |
 | **Notebook CRUD & Sharing** | `notebook_list` | Dual | List notebooks (`v1alpha` recently viewed or RPC full list) |
@@ -212,6 +216,14 @@ agy-gemini-notebook sync README.md docs/architecture.md
 ## 📦 Versioning & Changelog
 
 This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0.1` (2026-10-22) — Interactive Authentication, Graceful Auth Diagnostics & Cross-Workspace Plugin Launchers
+
+- **Interactive Login Tool, CLI & Sidecar Sign-In (`mcp_server.py`, `rpc_bridge.py`, `cli.py`, `sidecars/notebook_context_panel/`)**:
+  - **Why**: When calling `notebook_create` (or any Engine 2 RPC tool) before authenticating a Google NotebookLM session or Google Cloud `v1alpha` project, `notebooklm-py` raised an unhandled `FileNotFoundError: Storage file not found`, which Antigravity 2's MCP client masked behind a generic `Encountered error in tool execution: Error executing tool notebook_create` message with no direct way to log in from the IDE.
+  - **How**: Added `NotebookAuthRequiredError` and wrapped MCP tool handlers to return structured, actionable diagnostics (`status: "auth_required"`) instead of crashing tool execution. Added the `notebook_login` MCP tool (21 tools total), the `agy-gemini-notebook login` CLI subcommand, and a **"🔑 Sign In to Google NotebookLM"** button (`POST /api/login`) in the Sidecar UI panel. Also added automatic Playwright Chromium revision bridging (`_prepare_playwright_browsers_env`) and sandbox-compatible session storage fallback (`.notebooklm-auth/storage_state.json`).
+- **Cross-Workspace Plugin Command Resolution (`mcp_config.json`, `sidecars/notebook_context_panel/sidecar.json`)**:
+  - **Why & How**: Replaced relative command paths (`scripts/run_mcp.sh` and `sidecars/notebook_context_panel/server.py`) with dynamic `$HOME/.gemini/config/plugins/gemini-notebook` resolution while preserving `AGY_WORKSPACE_DIR=$(pwd)`, ensuring the MCP server and Sidecar UI launch reliably from any workspace opened in Antigravity 2 without hardcoding machine-specific paths.
 
 ### `v1.0` (2026-10-22) — Initial Stable Release
 

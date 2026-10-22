@@ -38,6 +38,7 @@ from agy_gemini_notebook.mcp_server import (
     notebook_create,
     notebook_get,
     notebook_list,
+    notebook_login,
     notebook_sync_files,
 )
 
@@ -157,6 +158,15 @@ async def api_list_notebooks(
             engine=engine,
             workspace_dir=workspace_dir,
         )
+        if res.get("status") == "auth_required":
+            return {
+                "status": "auth_required",
+                "engine": res.get("engine", engine),
+                "count": 0,
+                "notebooks": [],
+                "error": res.get("error"),
+                "remediation": res.get("remediation"),
+            }
         notebooks = [normalize_notebook_summary(nb) for nb in res.get("notebooks", [])]
         return {
             "status": "ok",
@@ -199,6 +209,16 @@ async def api_get_notebook(
             engine=engine,
             workspace_dir=workspace_dir,
         )
+        if raw_nb.get("status") == "auth_required":
+            return {
+                "status": "auth_required",
+                "notebook_id": target_id,
+                "notebook": None,
+                "sources": [],
+                "active_source_ids": [],
+                "error": raw_nb.get("error"),
+                "remediation": raw_nb.get("remediation"),
+            }
         normalized_nb = normalize_notebook_summary(raw_nb)
         raw_sources = raw_nb.get("sources") or []
         sources = [normalize_source_item(s) for s in raw_sources if isinstance(s, dict)]
@@ -394,10 +414,23 @@ async def api_create_notebook(
         engine=str(payload.get("engine") or "auto"),
         workspace_dir=ws,
     )
+    if created.get("status") == "auth_required":
+        return created
     return {
         "status": "created",
         "notebook": normalize_notebook_summary(created),
     }
+
+
+async def api_login_notebook(payload: dict[str, Any]) -> dict[str, Any]:
+    """Handle `POST /api/login` to launch interactive NotebookLM browser authentication."""
+    return await notebook_login(
+        browser=str(payload.get("browser") or "chromium"),
+        timeout=int(payload.get("timeout") or 300),
+        browser_cookies=payload.get("browser_cookies"),
+        account=payload.get("account"),
+        fresh=bool(payload.get("fresh", False)),
+    )
 
 
 class SidecarRequestHandler(SimpleHTTPRequestHandler):
@@ -523,6 +556,11 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
 
             if route == "/api/create":
                 data = asyncio.run(api_create_notebook(payload, workspace_dir=ws))
+                self._send_json(data)
+                return
+
+            if route == "/api/login":
+                data = asyncio.run(api_login_notebook(payload))
                 self._send_json(data)
                 return
 

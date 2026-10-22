@@ -1,7 +1,7 @@
 {
   "args": [
     "-c",
-    "if [ -f server.py ]; then exec python3 server.py; else exec python3 sidecars/notebook_context_panel/server.py; fi"
+    "for f in server.py sidecars/notebook_context_panel/server.py \"$HOME/.gemini/config/plugins/gemini-notebook/sidecars/notebook_context_panel/server.py\"; do if [ -f \"$f\" ]; then exec python3 \"$f\"; fi; done"
   ],
   "command": "bash",
   "description": "Interactive Gemini Notebook Context Selector & Source Filter for Antigravity 2",

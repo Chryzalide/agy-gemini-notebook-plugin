@@ -9,8 +9,9 @@ Use this skill whenever the user mentions **Gemini Notebook**, **NotebookLM**, *
 
 ## Available MCP Tools (`gemini_notebook_mcp`)
 
-### 1. Invoke & Bind Workspace Notebooks
+### 1. Invoke, Authenticate & Bind Workspace Notebooks
 - `notebook_status`: Check which notebook(s) are currently bound to the workspace (`.agents/notebook.json`) and check authentication status for both Engine 1 (`gcp_enterprise_rest`) and Engine 2 (`rpc_bridge`).
+- `notebook_login`: Authenticate with Google NotebookLM via an interactive browser window or browser cookie import when `has_saved_session` is `false` or when a tool returns `status: "auth_required"`.
 - `notebook_invoke`: High-level tool to invoke a notebook by ID, workspace alias (e.g. `"architecture"`, `"research"`), or fuzzy notebook title. Optionally pass `question` to immediately ask a grounded question and retrieve inline citations.
 - `notebook_attach`: Bind a `notebook_id` (and optional `alias` and `active_source_ids`) to the current workspace in `.agents/notebook.json`.
 - `notebook_list`: List available notebooks (with optional `query` title filter) via Google Cloud Discovery Engine `v1alpha` or RPC bridge.

@@ -28,7 +28,10 @@ from agy_gemini_notebook.config import (
     save_workspace_binding,
 )
 from agy_gemini_notebook.engines.gcp_enterprise_rest import GcpNotebookEnterpriseClient
-from agy_gemini_notebook.engines.rpc_bridge import NotebookRpcBridge
+from agy_gemini_notebook.engines.rpc_bridge import (
+    NotebookAuthRequiredError,
+    NotebookRpcBridge,
+)
 
 mcp = FastMCP(
     "gemini_notebook_mcp",
@@ -40,6 +43,22 @@ mcp = FastMCP(
         "Mind Maps, Quizzes, Slide Decks), and managing persistent notes."
     ),
 )
+
+
+def _auth_error_response(exc: Exception, engine: str = "rpc_bridge") -> dict[str, Any]:
+    """Return a structured, non-crashing MCP response when authentication is missing."""
+    return {
+        "status": "auth_required",
+        "authenticated": False,
+        "engine": engine,
+        "error": str(exc),
+        "remediation": (
+            "Call the `notebook_login` MCP tool to open the Google sign-in browser window, "
+            "run `agy-gemini-notebook login` in your terminal, or set `GCP_PROJECT_NUMBER` "
+            "with `gcloud auth login` for Google Cloud Enterprise."
+        ),
+        "sidecar_link": "sidecar://gemini-notebook/notebook_context_panel",
+    }
 
 
 def _extract_notebook_id(raw_id: str) -> str:
@@ -149,12 +168,37 @@ async def notebook_status(workspace_dir: str | None = None) -> dict[str, Any]:
     """Check current workspace Gemini Notebook binding and authentication status for both engines."""
     info = describe_environment(workspace_dir)
     bridge = NotebookRpcBridge()
+    resolved_storage = bridge.resolve_storage_path()
     info["rpc_bridge"] = {
         "notebooklm_py_installed": bridge.is_available(),
         "has_saved_session": bridge.has_saved_session(),
         "profile": bridge.profile or "default",
+        "storage_path": str(resolved_storage) if resolved_storage else None,
     }
     return info
+
+
+@mcp.tool()
+async def notebook_login(
+    browser: str = "chromium",
+    timeout: int = 300,
+    browser_cookies: str | None = None,
+    account: str | None = None,
+    fresh: bool = False,
+) -> dict[str, Any]:
+    """Authenticate with Google NotebookLM via an interactive browser window or browser cookie import.
+
+    Call this tool when `notebook_status` reports `has_saved_session: false` or when a notebook
+    tool returns `status: 'auth_required'`.
+    """
+    bridge = NotebookRpcBridge()
+    return await bridge.login(
+        browser=browser,
+        timeout=timeout,
+        browser_cookies=browser_cookies,
+        account=account,
+        fresh=fresh,
+    )
 
 
 @mcp.tool()
@@ -211,11 +255,15 @@ async def notebook_invoke(
     - If `question` is omitted: fetches the notebook's metadata, AI summary, suggested topics,
       and source list so the agent can immediately inspect and use the notebook context.
     """
-    resolved_id = await _resolve_notebook_target_async(
-        target=target,
-        engine=engine,
-        workspace_dir=workspace_dir,
-    )
+    try:
+        resolved_id = await _resolve_notebook_target_async(
+            target=target,
+            engine=engine,
+            workspace_dir=workspace_dir,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, engine)
+
     result: dict[str, Any] = {
         "invoked_notebook_id": resolved_id,
         "target": target or "active_workspace_notebook",
@@ -227,6 +275,8 @@ async def notebook_invoke(
             engine=engine,
             workspace_dir=workspace_dir,
         )
+        if details.get("status") == "auth_required":
+            return details
         result["notebook"] = details
     if question:
         qa = await notebook_query(
@@ -235,6 +285,8 @@ async def notebook_invoke(
             engine=engine,
             workspace_dir=workspace_dir,
         )
+        if qa.get("status") == "auth_required":
+            return qa
         result["query_result"] = qa
     return result
 
@@ -253,12 +305,15 @@ async def notebook_list(
 ) -> dict[str, Any]:
     """List Gemini Notebooks via official GCP v1alpha REST API or RPC bridge, with optional title filter."""
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest":
-        notebooks = await client.list_recently_viewed(page_size=page_size)
-        used_engine = "gcp_enterprise_rest"
-    else:
-        notebooks = await bridge.list_notebooks()
-        used_engine = "rpc_bridge"
+    try:
+        if selected_engine == "gcp_enterprise_rest":
+            notebooks = await client.list_recently_viewed(page_size=page_size)
+            used_engine = "gcp_enterprise_rest"
+        else:
+            notebooks = await bridge.list_notebooks()
+            used_engine = "rpc_bridge"
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
     if query:
         needle = query.lower().strip()
@@ -282,11 +337,14 @@ async def notebook_get(
     """Get metadata, AI summary, and list of sources for a Gemini Notebook (Dual-Engine)."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest":
-        data = await client.get_notebook(target_id)
-        data.setdefault("engine", "gcp_enterprise_rest")
-        return data
-    return await bridge.get_notebook(target_id)
+    try:
+        if selected_engine == "gcp_enterprise_rest":
+            data = await client.get_notebook(target_id)
+            data.setdefault("engine", "gcp_enterprise_rest")
+            return data
+        return await bridge.get_notebook(target_id)
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
 
 @mcp.tool()
@@ -300,11 +358,14 @@ async def notebook_create(
 ) -> dict[str, Any]:
     """Create a new Gemini Notebook via GCP v1alpha REST API or RPC bridge and optionally attach it."""
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest":
-        created = await client.create_notebook(title=title)
-        created.setdefault("engine", "gcp_enterprise_rest")
-    else:
-        created = await bridge.create_notebook(title=title, emoji=emoji)
+    try:
+        if selected_engine == "gcp_enterprise_rest":
+            created = await client.create_notebook(title=title)
+            created.setdefault("engine", "gcp_enterprise_rest")
+        else:
+            created = await bridge.create_notebook(title=title, emoji=emoji)
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
     notebook_id = created.get("notebookId") or created.get("name", "").split("/")[-1]
     if attach_to_workspace and notebook_id:
@@ -336,10 +397,13 @@ async def notebook_delete(
     """Delete one or more Gemini Notebooks via GCP v1alpha `batchDelete` or RPC bridge."""
     clean_ids = [_extract_notebook_id(nid) for nid in notebook_ids]
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest":
-        res = await client.batch_delete_notebooks(clean_ids)
-        return {"engine": "gcp_enterprise_rest", "deleted": clean_ids, "result": res}
-    return await bridge.delete_notebooks(clean_ids)
+    try:
+        if selected_engine == "gcp_enterprise_rest":
+            res = await client.batch_delete_notebooks(clean_ids)
+            return {"engine": "gcp_enterprise_rest", "deleted": clean_ids, "result": res}
+        return await bridge.delete_notebooks(clean_ids)
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
 
 @mcp.tool()
@@ -351,7 +415,10 @@ async def notebook_rename(
     """Rename a Gemini Notebook via the RPC bridge and update `.agents/notebook.json` if attached."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     bridge = NotebookRpcBridge()
-    res = await bridge.rename_notebook(target_id, new_title)
+    try:
+        res = await bridge.rename_notebook(target_id, new_title)
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
     binding = load_workspace_binding(workspace_dir)
     if binding and binding.notebook_id == target_id:
@@ -373,18 +440,21 @@ async def notebook_share(
     """Share a Gemini Notebook with an email (GCP Enterprise IAM) or toggle public link sharing (RPC)."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest" and email:
-        res = await client.share_notebook(
+    try:
+        if selected_engine == "gcp_enterprise_rest" and email:
+            res = await client.share_notebook(
+                notebook_id=target_id,
+                email=email,
+                role=role,
+                notify_via_email=notify_via_email,
+            )
+            return {"engine": "gcp_enterprise_rest", "notebookId": target_id, "result": res}
+        return await bridge.share_notebook(
             notebook_id=target_id,
-            email=email,
-            role=role,
-            notify_via_email=notify_via_email,
+            public=True if public is None else public,
         )
-        return {"engine": "gcp_enterprise_rest", "notebookId": target_id, "result": res}
-    return await bridge.share_notebook(
-        notebook_id=target_id,
-        public=True if public is None else public,
-    )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
 
 # =============================================================================
@@ -404,16 +474,20 @@ async def notebook_sync_files(
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
     results: list[dict[str, Any]] = []
-    for fpath in file_paths:
-        if selected_engine == "gcp_enterprise_rest":
-            res = await client.upload_file_source(notebook_id=target_id, file_path=fpath)
-        else:
-            res = await bridge.upload_file_source(
-                notebook_id=target_id,
-                file_path=fpath,
-                wait=wait,
-            )
-        results.append({"file": fpath, "result": res})
+    try:
+        for fpath in file_paths:
+            if selected_engine == "gcp_enterprise_rest":
+                res = await client.upload_file_source(notebook_id=target_id, file_path=fpath)
+            else:
+                res = await bridge.upload_file_source(
+                    notebook_id=target_id,
+                    file_path=fpath,
+                    wait=wait,
+                )
+            results.append({"file": fpath, "result": res})
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
+
     return {
         "engine": selected_engine,
         "notebook_id": target_id,
@@ -476,14 +550,17 @@ async def notebook_add_source(
         res.setdefault("engine", "gcp_enterprise_rest")
         return res
 
-    return await bridge.add_source(
-        notebook_id=target_id,
-        source_type=source_type,
-        value=value,
-        title=title,
-        mime_type=mime_type,
-        wait=wait,
-    )
+    try:
+        return await bridge.add_source(
+            notebook_id=target_id,
+            source_type=source_type,
+            value=value,
+            title=title,
+            mime_type=mime_type,
+            wait=wait,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
 
 @mcp.tool()
@@ -496,15 +573,18 @@ async def notebook_delete_sources(
     """Delete one or more sources from a Gemini Notebook (Dual-Engine)."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest":
-        res = await client.batch_delete_sources(notebook_id=target_id, source_ids=source_ids)
-        return {
-            "engine": "gcp_enterprise_rest",
-            "notebookId": target_id,
-            "deletedSourceIds": source_ids,
-            "result": res,
-        }
-    return await bridge.delete_sources(notebook_id=target_id, source_ids=source_ids)
+    try:
+        if selected_engine == "gcp_enterprise_rest":
+            res = await client.batch_delete_sources(notebook_id=target_id, source_ids=source_ids)
+            return {
+                "engine": "gcp_enterprise_rest",
+                "notebookId": target_id,
+                "deletedSourceIds": source_ids,
+                "result": res,
+            }
+        return await bridge.delete_sources(notebook_id=target_id, source_ids=source_ids)
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
 
 @mcp.tool()
@@ -523,12 +603,15 @@ async def notebook_search_sources(
             source_ids = binding.active_source_ids
 
     bridge = NotebookRpcBridge()
-    return await bridge.search_sources(
-        notebook_id=target_id,
-        query=query,
-        source_ids=source_ids,
-        limit=limit,
-    )
+    try:
+        return await bridge.search_sources(
+            notebook_id=target_id,
+            query=query,
+            source_ids=source_ids,
+            limit=limit,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
 
 @mcp.tool()
@@ -541,11 +624,14 @@ async def notebook_get_source_text(
     """Fetch the full indexed text (and optional AI summary/keywords guide) of a specific source."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     bridge = NotebookRpcBridge()
-    return await bridge.get_source_fulltext(
-        notebook_id=target_id,
-        source_id=source_id,
-        include_guide=include_guide,
-    )
+    try:
+        return await bridge.get_source_fulltext(
+            notebook_id=target_id,
+            source_id=source_id,
+            include_guide=include_guide,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
 
 # =============================================================================
@@ -581,14 +667,20 @@ async def notebook_query(
     if pref in ("gcp_rest", "gcp_enterprise_rest") and client.engine_id:
         return await client.query_enterprise(question=question, session_id=conversation_id)
 
-    res = await bridge.query_notebook(
-        notebook_id=target_id,
-        question=question,
-        source_ids=source_ids,
-        conversation_id=conversation_id,
-        save_as_note=save_as_note,
-        note_title=note_title,
-    )
+    try:
+        res = await bridge.query_notebook(
+            notebook_id=target_id,
+            question=question,
+            source_ids=source_ids,
+            conversation_id=conversation_id,
+            save_as_note=save_as_note,
+            note_title=note_title,
+        )
+    except NotebookAuthRequiredError as exc:
+        if client.project_number and client.engine_id:
+            return await client.query_enterprise(question=question, session_id=conversation_id)
+        return _auth_error_response(exc, "rpc_bridge")
+
     if res.get("status") == "rpc_unavailable" and client.project_number and client.engine_id:
         return await client.query_enterprise(question=question, session_id=conversation_id)
     return res
@@ -633,6 +725,8 @@ async def notebook_research(
             engine="rpc_bridge",
             workspace_dir=workspace_dir,
         )
+        if created_notebook.get("status") == "auth_required":
+            return created_notebook
         target_id = str(
             created_notebook.get("notebookId")
             or created_notebook.get("name", "").split("/")[-1]
@@ -640,17 +734,21 @@ async def notebook_research(
     else:
         target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
 
-    res = await bridge.run_research(
-        notebook_id=target_id,
-        query=query,
-        mode=mode,
-        source=source,
-        wait=wait,
-        import_sources=import_sources,
-        cited_only=cited_only,
-        timeout=timeout,
-        allow_duplicate=allow_duplicate,
-    )
+    try:
+        res = await bridge.run_research(
+            notebook_id=target_id,
+            query=query,
+            mode=mode,
+            source=source,
+            wait=wait,
+            import_sources=import_sources,
+            cited_only=cited_only,
+            timeout=timeout,
+            allow_duplicate=allow_duplicate,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
+
     if created_notebook:
         res["created_notebook"] = created_notebook
     return res
@@ -671,20 +769,23 @@ async def notebook_research_status(
     """Check status, wait for completion, import sources from, or cancel a Fast/Deep Research run."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     bridge = NotebookRpcBridge()
-    if cancel:
-        if not task_id:
-            raise ValueError("`task_id` is required when `cancel=True`.")
-        return await bridge.cancel_research(notebook_id=target_id, task_id=task_id)
+    try:
+        if cancel:
+            if not task_id:
+                raise ValueError("`task_id` is required when `cancel=True`.")
+            return await bridge.cancel_research(notebook_id=target_id, task_id=task_id)
 
-    return await bridge.poll_research(
-        notebook_id=target_id,
-        task_id=task_id,
-        wait=wait,
-        timeout=timeout,
-        import_sources=import_sources,
-        cited_only=cited_only,
-        allow_duplicate=allow_duplicate,
-    )
+        return await bridge.poll_research(
+            notebook_id=target_id,
+            task_id=task_id,
+            wait=wait,
+            timeout=timeout,
+            import_sources=import_sources,
+            cited_only=cited_only,
+            allow_duplicate=allow_duplicate,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
 
 # =============================================================================
@@ -707,25 +808,28 @@ async def notebook_create_audio(
     """Generate an Audio Overview podcast on the notebook via GCP v1alpha REST or RPC bridge."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     selected_engine, client, bridge = _select_engine(engine, workspace_dir)
-    if selected_engine == "gcp_enterprise_rest":
-        res = await client.create_audio_overview(
+    try:
+        if selected_engine == "gcp_enterprise_rest":
+            res = await client.create_audio_overview(
+                notebook_id=target_id,
+                episode_focus=episode_focus,
+                language_code=language_code,
+                source_ids=source_ids,
+            )
+            res.setdefault("engine", "gcp_enterprise_rest")
+            return res
+
+        return await bridge.create_audio_overview(
             notebook_id=target_id,
             episode_focus=episode_focus,
             language_code=language_code,
             source_ids=source_ids,
+            audio_format=audio_format,
+            audio_length=audio_length,
+            wait=wait,
         )
-        res.setdefault("engine", "gcp_enterprise_rest")
-        return res
-
-    return await bridge.create_audio_overview(
-        notebook_id=target_id,
-        episode_focus=episode_focus,
-        language_code=language_code,
-        source_ids=source_ids,
-        audio_format=audio_format,
-        audio_length=audio_length,
-        wait=wait,
-    )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, selected_engine)
 
 
 @mcp.tool()
@@ -743,16 +847,19 @@ async def notebook_generate_artifact(
     """Generate a NotebookLM Studio Artifact (`report`, `study_guide`, `briefing_doc`, `blog_post`, `mind_map`, `quiz`, `flashcards`, `slide_deck`, `data_table`, `infographic`, `video`, `audio`)."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     bridge = NotebookRpcBridge()
-    return await bridge.generate_artifact(
-        notebook_id=target_id,
-        artifact_type=artifact_type,
-        instructions=instructions,
-        report_format=report_format,
-        language_code=language_code,
-        source_ids=source_ids,
-        wait=wait,
-        timeout=timeout,
-    )
+    try:
+        return await bridge.generate_artifact(
+            notebook_id=target_id,
+            artifact_type=artifact_type,
+            instructions=instructions,
+            report_format=report_format,
+            language_code=language_code,
+            source_ids=source_ids,
+            wait=wait,
+            timeout=timeout,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
 
 @mcp.tool()
@@ -767,13 +874,16 @@ async def notebook_notes(
     """Manage persistent notes inside a Gemini Notebook (`action`: 'list', 'get', 'create', 'update', 'delete')."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
     bridge = NotebookRpcBridge()
-    return await bridge.manage_notes(
-        notebook_id=target_id,
-        action=action,
-        title=title,
-        content=content,
-        note_id=note_id,
-    )
+    try:
+        return await bridge.manage_notes(
+            notebook_id=target_id,
+            action=action,
+            title=title,
+            content=content,
+            note_id=note_id,
+        )
+    except NotebookAuthRequiredError as exc:
+        return _auth_error_response(exc, "rpc_bridge")
 
 
 # =============================================================================

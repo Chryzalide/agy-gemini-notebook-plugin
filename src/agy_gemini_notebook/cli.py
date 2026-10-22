@@ -20,6 +20,7 @@ from agy_gemini_notebook.mcp_server import (
     notebook_get,
     notebook_invoke,
     notebook_list,
+    notebook_login,
     notebook_notes,
     notebook_query,
     notebook_research,
@@ -38,6 +39,14 @@ async def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     cmd = args.command
     if cmd == "status":
         return await notebook_status(workspace_dir=args.workspace)
+    if cmd == "login":
+        return await notebook_login(
+            browser=args.browser,
+            timeout=args.timeout,
+            browser_cookies=args.browser_cookies,
+            account=args.account,
+            fresh=args.fresh,
+        )
     if cmd == "list":
         return await notebook_list(
             page_size=args.limit,
@@ -194,6 +203,39 @@ def build_parser() -> argparse.ArgumentParser:
 
     # status
     sub.add_parser("status", help="Show workspace notebook binding and engine auth status.")
+
+    # login
+    p_login = sub.add_parser(
+        "login",
+        help="Authenticate with Google NotebookLM via browser window or browser cookie import.",
+    )
+    p_login.add_argument(
+        "--browser",
+        default="chromium",
+        choices=["chromium", "chrome", "msedge"],
+        help="Browser channel for interactive login (default: chromium).",
+    )
+    p_login.add_argument(
+        "--browser-cookies",
+        default=None,
+        help="Import cookies from an installed browser (e.g. 'chrome', 'brave', 'firefox').",
+    )
+    p_login.add_argument(
+        "--account",
+        default=None,
+        help="Google account email when using --browser-cookies.",
+    )
+    p_login.add_argument(
+        "--timeout",
+        type=int,
+        default=300,
+        help="Seconds to wait for interactive browser sign-in (default: 300).",
+    )
+    p_login.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Start with a clean browser profile.",
+    )
 
     # list
     p_list = sub.add_parser("list", help="List available Gemini Notebooks.")

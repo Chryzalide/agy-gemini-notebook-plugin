@@ -1,7 +1,7 @@
 {
   "name": "gemini-notebook",
   "displayName": "Gemini Notebook (NotebookLM)",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Connect Antigravity 2 conversations and workspaces to Gemini Notebooks (NotebookLM & NotebookLM Enterprise) for grounded context, source synchronization, Deep Research, and interactive Q&A.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
