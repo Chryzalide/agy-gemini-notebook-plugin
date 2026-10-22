@@ -1,6 +1,6 @@
 # 📓 Gemini Notebook by Chryzalide (`agy-gemini-notebook-plugin`)
 
-![Version](https://img.shields.io/badge/version-v1.0.4-blue)
+![Version](https://img.shields.io/badge/version-v1.0.5-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
@@ -8,6 +8,25 @@
 **Invoke and pilot Gemini Notebooks (NotebookLM & NotebookLM Enterprise) from Google Antigravity 2, VS Code, Cursor, Claude Code, and the CLI.**
 
 In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a conversation for grounded, source-backed context. **`Gemini Notebook by Chryzalide`** (`agy-gemini-notebook-plugin`) is an independent, open-source community plugin that brings first-class Gemini Notebook integration—plus **autonomous notebook piloting, Fast & Deep Research, and Studio Artifact generation**—directly into **Google Antigravity 2**, **VS Code**, and any MCP-compatible agent harness.
+
+---
+
+## 🎬 Visual Overview & Interactive Demo
+
+![Gemini Notebook by Chryzalide — 4-Step Animated Demo (Setup, Grounded Q&A, Deep Research to Local Markdown, and Studio Sync)](assets/demo.gif)
+
+<details>
+<summary><strong>📸 View High-Resolution Static Previews (Sidecar Context Panel &amp; CLI Deep Research)</strong></summary>
+
+### 1. Autonomous Deep Research $\rightarrow$ Local Project `.md` Synthesis (`agy-gemini-notebook`)
+![CLI Deep Research to Local Markdown Preview](assets/cli-research-preview.png)
+
+### 2. Google Antigravity 2 Auxiliary Pane Sidecar UI (`sidecar://gemini-notebook/notebook_context_panel/ui.html`)
+<p align="center">
+  <img src="assets/sidecar-preview.png" alt="Gemini Notebook by Chryzalide Sidecar UI Preview" width="460" />
+</p>
+
+</details>
 
 ---
 
@@ -292,6 +311,12 @@ agy-gemini-notebook sync README.md docs/architecture.md
 ## 📦 Versioning & Changelog
 
 This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0.5` (2026-10-22) — Visual Demonstration Suite (Animated Walkthrough GIF, Sidecar UI & CLI Deep Research Previews)
+
+- **Animated 4-Step Walkthrough GIF & High-DPI Previews (`assets/demo.gif`, `assets/sidecar-preview.png`, `assets/cli-research-preview.png`, `README.md`)**:
+  - **Why**: Visitors, contributors, and community listings (GitHub, Reddit, Hacker News, LinkedIn, X/Twitter, and MCP directories) need an immediate, visual demonstration of how the Antigravity 2 Sidecar UI (`sidecar://gemini-notebook/notebook_context_panel/ui.html`) and the `agy-gemini-notebook` CLI work together across setup, grounded Q&A, autonomous Deep Research $\rightarrow$ local `.md` synthesis, and Studio artifact generation.
+  - **How**: Rendered a 4-step animated walkthrough (`assets/demo.gif`) and standalone high-resolution previews (`assets/sidecar-preview.png` and `assets/cli-research-preview.png`) directly from the live Dark Mode `sidecars/notebook_context_panel/ui.html` layout and CLI output, and embedded them into a new `## 🎬 Visual Overview & Interactive Demo` section at the top of `README.md`.
 
 ### `v1.0.4` (2026-10-22) — Google Sign-In Policy Compliance, 1-Click Local Browser Session Import & Explicit Grey-Area Alerts
 
