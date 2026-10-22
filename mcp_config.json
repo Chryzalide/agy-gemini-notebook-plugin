@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "gemini_notebook_mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        ".",
+        "agy-gemini-notebook-mcp"
+      ]
+    }
+  }
+}

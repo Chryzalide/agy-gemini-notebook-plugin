@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Notebook Context</title>
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #131314;
+      --card: #1e1f20;
+      --border: #333537;
+      --text: #e3e3e3;
+      --muted: #9aa0a6;
+      --accent: #8ab4f8;
+      --success: #81c995;
+    }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 {
+      font-size: 15px;
+      margin: 0;
+      font-weight: 600;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(138, 180, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(138, 180, 248, 0.3);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .card h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 0 0 8px 0;
+    }
+    .btn {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #282a2c;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 500;
+      margin-top: 8px;
+    }
+    .btn:hover {
+      border-color: var(--accent);
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📓 Gemini Notebook</h1>
+    <span class="badge">Dual-Engine v0.1</span>
+  </div>
+
+  <div class="card">
+    <h2>Active Notebook (.agents/notebook.json)</h2>
+    <div id="active-notebook">
+      No notebook attached. Use <code>notebook_attach</code> in the Antigravity 2 chat.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Available Engines</h2>
+    <div>• <strong>GCP REST v1alpha</strong>: CRUD, Upload &amp; Audio Overviews</div>
+    <div>• <strong>RPC Bridge</strong>: Grounded RAG Q&amp;A &amp; Full-Text</div>
+  </div>
+</body>
+</html>

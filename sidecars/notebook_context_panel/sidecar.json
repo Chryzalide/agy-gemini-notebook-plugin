@@ -1,0 +1,20 @@
+{
+  "args": [
+    "sidecars/notebook_context_panel/server.py"
+  ],
+  "command": "python3",
+  "description": "Interactive Gemini Notebook Context Selector & Source Filter for Antigravity 2",
+  "display_name": "Gemini Notebook Context",
+  "has_web_ui": true,
+  "restart_policy": "always",
+  "ui_config": {
+    "display_name": "Gemini Notebook Context",
+    "views": [
+      {
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "path": "/ui.html",
+        "title": "Gemini Notebook"
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agy-gemini-notebook-plugin"
+version = "0.1.0"
+description = "Open-source Antigravity 2 plugin to connect conversations and workspaces to Gemini Notebooks (NotebookLM & NotebookLM Enterprise)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+  { name = "Open Source Contributors" }
+]
+keywords = ["antigravity", "gemini", "notebooklm", "mcp", "google-cloud", "discovery-engine"]
+dependencies = [
+  "mcp>=1.2.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+rpc = [
+  "notebooklm-py[browser]>=0.1.0",
+]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "ruff>=0.5.0",
+]
+
+[project.scripts]
+agy-gemini-notebook-mcp = "agy_gemini_notebook.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agy_gemini_notebook"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
