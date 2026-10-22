@@ -169,21 +169,43 @@ class NotebookRpcBridge:
         return self.resolve_storage_path() is not None
 
     @staticmethod
-    def _prepare_playwright_browsers_env(env: dict[str, str]) -> None:
+    def _resolve_python_executable() -> str:
+        """Return the plugin `.venv/bin/python` executable if available, else `sys.executable`."""
+        candidates = [
+            PLUGIN_ROOT / ".venv" / "bin" / "python",
+            PLUGIN_ROOT / ".venv" / "bin" / "python3",
+            Path.home()
+            / ".gemini"
+            / "config"
+            / "plugins"
+            / "gemini-notebook"
+            / ".venv"
+            / "bin"
+            / "python",
+        ]
+        for cand in candidates:
+            with suppress(OSError):
+                if cand.is_file() and os.access(cand, os.X_OK):
+                    return str(cand)
+        return sys.executable
+
+    @staticmethod
+    def _prepare_playwright_browsers_env(env: dict[str, str] | None = None) -> str | None:
         """Bridge existing `~/.cache/ms-playwright/chromium-*` builds if Playwright's expected revision is missing."""
-        if env.get("PLAYWRIGHT_BROWSERS_PATH"):
-            return
+        target_env = env if env is not None else os.environ
+        if target_env.get("PLAYWRIGHT_BROWSERS_PATH"):
+            return target_env.get("PLAYWRIGHT_BROWSERS_PATH")
         with suppress(Exception):
             from playwright.sync_api import sync_playwright
 
             with sync_playwright() as pw:
                 expected_exec = Path(pw.chromium.executable_path)
             if expected_exec.is_file():
-                return
+                return str(expected_exec.parent.parent.parent)
 
             ms_cache = Path.home() / ".cache" / "ms-playwright"
             if not ms_cache.is_dir():
-                return
+                return None
             existing_revs = sorted(
                 [
                     d
@@ -193,7 +215,7 @@ class NotebookRpcBridge:
                 reverse=True,
             )
             if not existing_revs:
-                return
+                return None
 
             expected_rev_name = expected_exec.parent.parent.name
             bridge_dir = FALLBACK_AUTH_DIR / "playwright-browsers"
@@ -201,7 +223,9 @@ class NotebookRpcBridge:
             target_link = bridge_dir / expected_rev_name
             if not target_link.exists():
                 target_link.symlink_to(existing_revs[0])
-            env["PLAYWRIGHT_BROWSERS_PATH"] = str(bridge_dir)
+            target_env["PLAYWRIGHT_BROWSERS_PATH"] = str(bridge_dir)
+            return str(bridge_dir)
+        return None
 
     async def login(
         self,
@@ -222,8 +246,9 @@ class NotebookRpcBridge:
         fallback_storage = FALLBACK_AUTH_DIR / "profiles" / prof / "storage_state.json"
         fallback_storage.parent.mkdir(parents=True, exist_ok=True)
 
+        python_exe = self._resolve_python_executable()
         cmd = [
-            sys.executable,
+            python_exe,
             "-m",
             "notebooklm",
             "--storage",
@@ -243,6 +268,18 @@ class NotebookRpcBridge:
 
         env = dict(os.environ)
         env["NOTEBOOKLM_HOME"] = str(FALLBACK_AUTH_DIR)
+        venv_site_dirs = [
+            str(p) for p in sorted((PLUGIN_ROOT / ".venv" / "lib").glob("python*/site-packages"))
+        ]
+        if venv_site_dirs:
+            existing_py_path = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = ":".join(
+                [*venv_site_dirs, str(PLUGIN_ROOT / "src"), *([existing_py_path] if existing_py_path else [])]
+            )
+        venv_bin = PLUGIN_ROOT / ".venv" / "bin"
+        if venv_bin.is_dir():
+            env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
+
         if not browser_cookies and browser == "chromium":
             await asyncio.to_thread(self._prepare_playwright_browsers_env, env)
 

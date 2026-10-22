@@ -6,37 +6,39 @@
   <title>Gemini Notebook by Chryzalide</title>
   <script src="/preload.js"></script>
   <style>
-    :root {
-      color-scheme: dark light;
-      --bg: #131314;
-      --card: #1e1f20;
-      --card-elevated: #282a2c;
-      --border: #333537;
-      --text: #e3e3e3;
-      --muted: #9aa0a6;
-      --accent: #8ab4f8;
-      --accent-strong: #1a73e8;
-      --success: #81c995;
-      --warning: #fdd663;
-      --danger: #f28b82;
+    :root,
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --nb-bg: #131314;
+      --nb-card: #1e1f22;
+      --nb-card-elevated: #282a2e;
+      --nb-border: #3c4043;
+      --nb-text: #f3f4f6;
+      --nb-text-secondary: #cbd5e1;
+      --nb-heading: #d2e3fc;
+      --nb-accent: #8ab4f8;
+      --nb-accent-strong: #1a73e8;
+      --nb-success: #81c995;
+      --nb-warning: #fdd663;
+      --nb-danger: #f28b82;
       --icon-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>");
       --icon-dash: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'><line x1='5' y1='12' x2='19' y2='12'></line></svg>");
     }
 
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #f8f9fa;
-        --card: #ffffff;
-        --card-elevated: #f1f3f4;
-        --border: #dadce0;
-        --text: #202124;
-        --muted: #5f6368;
-        --accent: #1a73e8;
-        --accent-strong: #1557b0;
-        --success: #188038;
-        --warning: #b06000;
-        --danger: #c5221f;
-      }
+    [data-theme="light"] {
+      color-scheme: light;
+      --nb-bg: #f8f9fa;
+      --nb-card: #ffffff;
+      --nb-card-elevated: #f1f3f4;
+      --nb-border: #dadce0;
+      --nb-text: #1f2124;
+      --nb-text-secondary: #4a4e54;
+      --nb-heading: #1a73e8;
+      --nb-accent: #1a73e8;
+      --nb-accent-strong: #1557b0;
+      --nb-success: #188038;
+      --nb-warning: #b06000;
+      --nb-danger: #c5221f;
     }
 
     * {
@@ -47,11 +49,11 @@
       margin: 0;
       padding: 14px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--nb-bg);
+      color: var(--nb-text);
       font-size: 13px;
       line-height: 1.45;
-      accent-color: var(--accent);
+      accent-color: var(--nb-accent);
     }
 
     .header {
@@ -61,7 +63,7 @@
       gap: 8px;
       margin-bottom: 14px;
       padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--nb-border);
     }
 
     .header-title {
@@ -74,6 +76,7 @@
       font-size: 15px;
       margin: 0;
       font-weight: 600;
+      color: var(--nb-text);
     }
 
     .header-actions {
@@ -89,35 +92,35 @@
       font-size: 11px;
       padding: 2px 8px;
       border-radius: 999px;
-      background: rgba(138, 180, 248, 0.14);
-      color: var(--accent);
-      border: 1px solid rgba(138, 180, 248, 0.3);
-      font-weight: 500;
+      background: rgba(138, 180, 248, 0.16);
+      color: var(--nb-accent);
+      border: 1px solid rgba(138, 180, 248, 0.38);
+      font-weight: 600;
       white-space: nowrap;
     }
 
     .badge.ok {
-      background: rgba(129, 201, 149, 0.14);
-      color: var(--success);
-      border-color: rgba(129, 201, 149, 0.35);
+      background: rgba(129, 201, 149, 0.16);
+      color: var(--nb-success);
+      border-color: rgba(129, 201, 149, 0.4);
     }
 
     .badge.warn {
-      background: rgba(253, 214, 99, 0.14);
-      color: var(--warning);
-      border-color: rgba(253, 214, 99, 0.35);
+      background: rgba(253, 214, 99, 0.16);
+      color: var(--nb-warning);
+      border-color: rgba(253, 214, 99, 0.4);
     }
 
     .badge.err {
-      background: rgba(242, 139, 130, 0.14);
-      color: var(--danger);
-      border-color: rgba(242, 139, 130, 0.35);
+      background: rgba(242, 139, 130, 0.16);
+      color: var(--nb-danger);
+      border-color: rgba(242, 139, 130, 0.4);
     }
 
     .icon-btn {
-      background: var(--card-elevated);
-      color: var(--text);
-      border: 1px solid var(--border);
+      background: var(--nb-card-elevated);
+      color: var(--nb-text);
+      border: 1px solid var(--nb-border);
       border-radius: 6px;
       padding: 4px 8px;
       font-size: 12px;
@@ -126,20 +129,20 @@
     }
 
     .icon-btn:hover {
-      border-color: var(--accent);
+      border-color: var(--nb-accent);
     }
 
     .icon-btn:focus-visible,
     .btn:focus-visible,
     .select-input:focus-visible,
     .text-input:focus-visible {
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--nb-accent);
       outline-offset: 2px;
     }
 
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
+      background: var(--nb-card);
+      border: 1px solid var(--nb-border);
       border-radius: 8px;
       padding: 12px;
       margin-bottom: 12px;
@@ -157,9 +160,9 @@
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--muted);
+      color: var(--nb-heading);
       margin: 0;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     .engine-grid {
@@ -174,8 +177,8 @@
       justify-content: space-between;
       gap: 8px;
       padding: 8px 10px;
-      background: var(--card-elevated);
-      border: 1px solid var(--border);
+      background: var(--nb-card-elevated);
+      border: 1px solid var(--nb-border);
       border-radius: 6px;
     }
 
@@ -189,11 +192,12 @@
     .engine-name {
       font-weight: 600;
       font-size: 12px;
+      color: var(--nb-text);
     }
 
     .engine-sub {
       font-size: 11px;
-      color: var(--muted);
+      color: var(--nb-text-secondary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -211,21 +215,26 @@
       width: 100%;
       padding: 7px 10px;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--card-elevated);
-      color: var(--text);
+      border: 1px solid var(--nb-border);
+      background: var(--nb-card-elevated);
+      color: var(--nb-text);
       font-size: 12px;
+    }
+
+    .text-input::placeholder {
+      color: var(--nb-text-secondary);
+      opacity: 0.75;
     }
 
     .btn {
       width: 100%;
       padding: 8px 12px;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--card-elevated);
-      color: var(--text);
+      border: 1px solid var(--nb-border);
+      background: var(--nb-card-elevated);
+      color: var(--nb-text);
       cursor: pointer;
-      font-weight: 500;
+      font-weight: 600;
       font-size: 12px;
       margin-top: 8px;
       display: inline-flex;
@@ -235,9 +244,9 @@
     }
 
     .btn.primary {
-      background: rgba(138, 180, 248, 0.16);
-      border-color: rgba(138, 180, 248, 0.4);
-      color: var(--accent);
+      background: rgba(138, 180, 248, 0.18);
+      border-color: rgba(138, 180, 248, 0.45);
+      color: var(--nb-accent);
     }
 
     .btn.inline {
@@ -247,7 +256,7 @@
     }
 
     .btn:hover:not(:disabled) {
-      border-color: var(--accent);
+      border-color: var(--nb-accent);
     }
 
     .btn:disabled {
@@ -258,14 +267,15 @@
     .active-summary {
       padding: 8px 10px;
       border-radius: 6px;
-      background: var(--card-elevated);
-      border: 1px solid var(--border);
+      background: var(--nb-card-elevated);
+      border: 1px solid var(--nb-border);
       margin-bottom: 8px;
     }
 
     .active-title {
       font-weight: 600;
       font-size: 13px;
+      color: var(--nb-text);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -274,7 +284,7 @@
 
     .active-id {
       font-size: 11px;
-      color: var(--muted);
+      color: var(--nb-text-secondary);
       margin-top: 2px;
       word-break: break-all;
     }
@@ -294,8 +304,8 @@
     }
 
     .checkbox-label:hover {
-      background: var(--card-elevated);
-      border-color: var(--border);
+      background: var(--nb-card-elevated);
+      border-color: var(--nb-border);
     }
 
     .checkbox-left {
@@ -319,7 +329,7 @@
       border: 2px solid currentColor;
       border-radius: 4px;
       cursor: pointer;
-      color: var(--accent);
+      color: var(--nb-accent);
       flex-shrink: 0;
     }
 
@@ -379,6 +389,7 @@
     .source-title {
       font-size: 12px;
       font-weight: 500;
+      color: var(--nb-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -386,13 +397,13 @@
 
     .source-meta {
       font-size: 10px;
-      color: var(--muted);
+      color: var(--nb-text-secondary);
       white-space: nowrap;
       flex-shrink: 0;
     }
 
     .select-all-bar {
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--nb-border);
       margin-bottom: 4px;
       padding-bottom: 2px;
     }
@@ -401,15 +412,15 @@
       margin-top: 8px;
       padding: 8px 10px;
       border-radius: 6px;
-      background: var(--card-elevated);
-      border: 1px solid var(--border);
+      background: var(--nb-card-elevated);
+      border: 1px solid var(--nb-border);
       font-size: 12px;
     }
 
     details.summary-box summary {
       cursor: pointer;
       font-weight: 500;
-      color: var(--accent);
+      color: var(--nb-accent);
     }
 
     .doc-chips {
@@ -427,14 +438,15 @@
       font-size: 11px;
       padding: 4px 10px;
       border-radius: 6px;
-      background: var(--card-elevated);
-      border: 1px solid var(--border);
+      background: var(--nb-card-elevated);
+      border: 1px solid var(--nb-border);
+      color: var(--nb-text);
       cursor: pointer;
     }
 
-    @supports not (accent-color: var(--accent)) {
+    @supports not (accent-color: var(--nb-accent)) {
       input[type="checkbox"]:not(.checkbox-custom):focus-visible {
-        outline: 2px solid var(--accent);
+        outline: 2px solid var(--nb-accent);
         outline-offset: 2px;
       }
     }
@@ -443,10 +455,10 @@
       margin-top: 8px;
       padding: 8px 10px;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--card-elevated);
+      border: 1px solid var(--nb-border);
+      background: var(--nb-card-elevated);
       font-size: 12px;
-      color: var(--muted);
+      color: var(--nb-text-secondary);
       display: none;
     }
 
@@ -455,24 +467,24 @@
     }
 
     .status-toast.ok {
-      color: var(--success);
+      color: var(--nb-success);
       border-color: rgba(129, 201, 149, 0.35);
     }
 
     .status-toast.err {
-      color: var(--danger);
+      color: var(--nb-danger);
       border-color: rgba(242, 139, 130, 0.35);
     }
 
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 11px;
-      color: var(--accent);
+      color: var(--nb-accent);
     }
 
     .muted-note {
       font-size: 12px;
-      color: var(--muted);
+      color: var(--nb-text-secondary);
       padding: 6px 0;
     }
   </style>
@@ -481,7 +493,7 @@
   <div class="header">
     <div class="header-title">
       <h1>📓 Gemini Notebook by Chryzalide</h1>
-      <span id="active-engine-badge" class="badge">Dual-Engine v1.0.2</span>
+      <span id="active-engine-badge" class="badge">Dual-Engine v1.0.3</span>
     </div>
     <div class="header-actions">
       <button id="refresh-btn" class="icon-btn" type="button" title="Refresh status and notebooks">
@@ -583,7 +595,7 @@
 
     <details id="notebook-summary-details" class="summary-box" style="display: none;">
       <summary>Notebook AI Overview</summary>
-      <p id="notebook-summary-text" style="margin: 6px 0 0 0; color: var(--muted);"></p>
+      <p id="notebook-summary-text" style="margin: 6px 0 0 0; color: var(--nb-text-secondary);"></p>
     </details>
   </div>
 
@@ -603,6 +615,25 @@
   <div id="status-toast" class="status-toast" role="status" aria-live="polite"></div>
 
   <script>
+    function syncHostTheme() {
+      const root = document.documentElement;
+      const computedBg = getComputedStyle(root).getPropertyValue("--background").trim();
+      if (computedBg && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(computedBg)) {
+        let hex = computedBg.slice(1);
+        if (hex.length === 3) {
+          hex = hex.split("").map((c) => c + c).join("");
+        }
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        root.setAttribute("data-theme", luminance > 0.65 ? "light" : "dark");
+      } else if (!root.getAttribute("data-theme")) {
+        root.setAttribute("data-theme", "dark");
+      }
+    }
+    syncHostTheme();
+
     const state = {
       engine: "auto",
       attachedNotebook: null,

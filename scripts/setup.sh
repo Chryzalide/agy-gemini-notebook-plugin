@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 echo "======================================================================"
-echo " 📓 Gemini Notebook by Chryzalide — Setup Workflow (v1.0.2)"
+echo " 📓 Gemini Notebook by Chryzalide — Setup Workflow (v1.0.3)"
 echo "======================================================================"
 echo ""
 

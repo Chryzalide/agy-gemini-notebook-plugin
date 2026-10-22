@@ -107,7 +107,7 @@ Author: **Souryan Augé** (`https://souryan-auge.fr/`)
 - **`staging`**: Pre-production branch dedicated to real-world integration and E2E testing (`origin/staging`).
 - **`main`**: Stable production branch (`origin/main`).
 - **Mandatory Versioning & Changelog in `README.md`**:
-  - Current release baseline: **`v1.0.2`** (`1.0.2` in `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+  - Current release baseline: **`v1.0.3`** (`1.0.3` in `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
   - **Every change made to this repository MUST be versioned, documented, explained (why & how), and recorded in the `## 📦 Versioning & Changelog` section of `README.md`.**
 - **100% English Codebase & Docs**: Even when conversing with the user in French, all files in the repository (code, comments, docstrings, UI, `README.md`, `SKILL.md`, commit messages) MUST be written **100% in English**.
 - **Zero Local Path Leaks**: Never commit local machine filesystem paths, usernames, mount points, or private environment details to any tracked file in this public repository.

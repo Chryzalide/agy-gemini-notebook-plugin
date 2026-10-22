@@ -15,6 +15,7 @@ build/
 *.cookies.json
 storage_state.json
 .notebooklm-auth/
+.agents/notebook.json
 
 # OS / IDE
 .DS_Store

@@ -266,3 +266,21 @@ def test_sidecar_http_lifecycle_and_endpoints(
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_sidecar_ui_uses_namespaced_theme_tokens_and_venv_python() -> None:
+    """Ensure ui.html avoids shadcn `--muted` collisions and rpc_bridge resolves .venv python."""
+    from agy_gemini_notebook.engines.rpc_bridge import NotebookRpcBridge
+
+    ui_html = (SERVER_PATH.parent / "ui.html").read_text(encoding="utf-8")
+    assert "--nb-text:" in ui_html
+    assert "--nb-text-secondary:" in ui_html
+    assert "--nb-heading:" in ui_html
+    assert "var(--muted)" not in ui_html
+    assert "prefers-color-scheme: light" not in ui_html
+
+    resolved_py = NotebookRpcBridge._resolve_python_executable()
+    venv_py = REPO_ROOT / ".venv" / "bin" / "python"
+    if venv_py.is_file():
+        assert Path(resolved_py).resolve() == venv_py.resolve()
+

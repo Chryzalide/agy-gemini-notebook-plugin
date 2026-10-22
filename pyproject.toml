@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agy-gemini-notebook-plugin"
-version = "1.0.2"
+version = "1.0.3"
 description = "Open-source Antigravity 2 plugin to connect conversations and workspaces to Gemini Notebooks (NotebookLM & NotebookLM Enterprise)"
 readme = "README.md"
 license = { text = "MIT" }

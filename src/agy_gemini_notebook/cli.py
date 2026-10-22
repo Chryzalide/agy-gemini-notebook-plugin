@@ -40,7 +40,7 @@ async def _run_setup(args: argparse.Namespace) -> dict[str, Any]:
 
     from agy_gemini_notebook.engines.rpc_bridge import (
         PLUGIN_ROOT,
-        _prepare_playwright_browsers_env,
+        NotebookRpcBridge,
     )
 
     plugins_dir = Path.home() / ".gemini" / "config" / "plugins"
@@ -54,7 +54,7 @@ async def _run_setup(args: argparse.Namespace) -> dict[str, Any]:
     except OSError as exc:
         link_status = f"skipped ({exc})"
 
-    playwright_dir = _prepare_playwright_browsers_env()
+    playwright_dir = NotebookRpcBridge._prepare_playwright_browsers_env()
     login_result: dict[str, Any] | None = None
     if getattr(args, "login", False):
         login_result = await notebook_login(

@@ -1,6 +1,6 @@
 # 📓 Gemini Notebook by Chryzalide (`agy-gemini-notebook-plugin`)
 
-![Version](https://img.shields.io/badge/version-v1.0.2-blue)
+![Version](https://img.shields.io/badge/version-v1.0.3-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
@@ -262,6 +262,15 @@ agy-gemini-notebook sync README.md docs/architecture.md
 ## 📦 Versioning & Changelog
 
 This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0.3` (2026-10-22) — Sidecar Dark Mode Contrast Fix & Isolated `.venv` Sign-In Subprocess Resolution
+
+- **High-Contrast Dark Mode & Namespaced CSS Tokens (`sidecars/notebook_context_panel/ui.html`)**:
+  - **Why**: In Antigravity 2 Dark Mode on Linux, section headers (`h2`) and secondary labels (`color: var(--muted)`) rendered as dark gray/black on dark `#1e1f20` cards for two reasons: (1) Antigravity 2's sidecar host bridge (`/preload.js`) injects shadcn-style inline CSS custom properties onto `<html style="--muted: #18191b; --card: #1e1f20; ...">` where `--muted` is a dark surface background rather than a foreground text color, overriding `:root { --muted: ... }`, and (2) `@media (prefers-color-scheme: light)` could match inside the Linux Electron webview even when the IDE shell was dark.
+  - **How**: Replaced all generic CSS custom properties with collision-proof `--nb-*` tokens (`--nb-bg`, `--nb-card`, `--nb-card-elevated`, `--nb-border`, `--nb-text: #f3f4f6`, `--nb-text-secondary: #cbd5e1`, `--nb-heading: #d2e3fc`, `--nb-accent: #8ab4f8`), removed the `@media (prefers-color-scheme: light)` media query override, made high-contrast Dark Mode the default (`:root, [data-theme="dark"]`), and added `syncHostTheme()` to inspect `--background` luminance on `document.documentElement` when switching themes.
+- **Isolated `.venv` Python Resolution for Browser Sign-In (`src/agy_gemini_notebook/engines/rpc_bridge.py`, `sidecars/notebook_context_panel/server.py`, `sidecars/notebook_context_panel/notebooklm.py`)**:
+  - **Why**: Clicking **"🔑 Sign In to Google NotebookLM"** in the Sidecar UI failed with `/usr/bin/python3: No module named notebooklm` because `sidecar.json` launches `server.py` using the system `python3` (`/usr/bin/python3`). Although `server.py` added `.venv/lib/python*/site-packages` to `sys.path` in-memory, `NotebookRpcBridge.login()` spawned `[sys.executable, "-m", "notebooklm", "login"]` in a child process where `sys.executable` was still `/usr/bin/python3`.
+  - **How**: Added `NotebookRpcBridge._resolve_python_executable()` to resolve `PLUGIN_ROOT / ".venv" / "bin" / "python"` (and inject `.venv` `PYTHONPATH`/`PATH`), updated `server.py` to point `sys.executable` to `.venv/bin/python`, and added a `sidecars/notebook_context_panel/notebooklm.py` launcher shim that transparently `execve`s `.venv/bin/notebooklm` even if an already-running `server.py` process invokes `/usr/bin/python3 -m notebooklm`.
 
 ### `v1.0.2` (2026-10-22) — Rebranding to "Gemini Notebook by Chryzalide", Antigravity 2 Sidecar SDK Protocol Fix & Automated 5-Step Setup Workflow
 
