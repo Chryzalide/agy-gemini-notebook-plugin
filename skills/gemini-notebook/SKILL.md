@@ -52,3 +52,9 @@ Use this skill whenever the user mentions **Gemini Notebook**, **NotebookLM**, *
 1. Call `notebook_research(query="...", mode="deep", source="web", wait=True, import_sources=True, create_notebook_title="...")` (or omit `create_notebook_title` to use the attached notebook).
 2. Review the synthesized `report` and `imported_sources`.
 3. Optionally call `notebook_generate_artifact(artifact_type="study_guide")` or `notebook_create_audio(...)` to produce deliverables from the newly researched corpus.
+
+### Workflow C: Documentary Research for Decision Support $\rightarrow$ Local Project `.md` Files
+When the user's project needs documentary research to aid technical, architectural, or product decision-making:
+1. **Open or Create a Notebook**: Invoke an existing Gemini Notebook (`notebook_invoke(target="...")`) or create a new one (`notebook_create(title="...", attach_to_workspace=True)`).
+2. **Run Research or Query Curated Sources**: Launch documentary research (`notebook_research(query="...", mode="deep", import_sources=True)`) and/or ask targeted questions over the documents in the notebook (`notebook_query` / `notebook_search_sources`).
+3. **Create Local `.md` Files in the Project**: Synthesize the relevant, decision-focused findings (with explicit notebook & source citations) into local Markdown files inside the project workspace (e.g., `docs/research/<topic>.md` or `docs/adr/<decision>.md`).

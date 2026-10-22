@@ -1,5 +1,10 @@
 # 📓 agy-gemini-notebook-plugin
 
+![Version](https://img.shields.io/badge/version-v1.0-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+[![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
+
 **Invoke and pilot Gemini Notebooks (NotebookLM & NotebookLM Enterprise) from Google Antigravity 2, VS Code, Cursor, Claude Code, and the CLI.**
 
 In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a conversation for grounded, source-backed context. **`agy-gemini-notebook-plugin`** brings first-class Gemini Notebook integration—plus **autonomous notebook piloting, Fast & Deep Research, and Studio Artifact generation**—directly into **Google Antigravity 2**, **VS Code**, and any MCP-compatible agent harness.
@@ -13,6 +18,8 @@ In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a 
   - Invoke any notebook on the fly by ID, workspace alias, or fuzzy title match—with optional one-step grounded Q&A and inline source citations.
 - 🔬 **Autonomous Fast & Deep Research (`notebook_research`)**:
   - Pilot NotebookLM's **Fast Research** (`mode="fast"`), **Deep Research** (`mode="deep"`), and **Source Discovery** (`mode="discover"`) across the **Web** or **Google Drive**, and automatically import verified sources into your notebook.
+- 📝 **Documentary Research $\rightarrow$ Local Markdown Synthesis**:
+  - Turn research findings and curated notebook Q&A directly into structured, source-cited `.md` decision records and technical briefs inside your local project workspace.
 - 🏢 **Engine 1 — Official Google Cloud API (`v1alpha` Discovery Engine)**:
   - 100% official OAuth 2.0 authentication via `gcloud auth print-access-token` (no browser cookies required).
   - Create/get/delete/share notebooks, upload local files (`sources:uploadFile`), ingest URLs/YouTube/Drive (`sources:batchCreate`), generate Audio Overviews, and run Enterprise Grounded Q&A (`servingConfigs:answer`).
@@ -22,6 +29,46 @@ In the Gemini web app, users can attach a **Gemini Notebook (NotebookLM)** to a 
   - **Antigravity 2 Plugin**: Native MCP Server + Skill + Grounding Rule + Auxiliary Pane Sidecar UI.
   - **VS Code / Cursor / Claude Code**: Portable `scripts/run_mcp.sh` wrapper + MCP Resources (`notebook://active`) & Prompts (`invoke_notebook`, `deep_research_notebook`) + `--transport stdio|sse|streamable-http`.
   - **Standalone CLI (`agy-gemini-notebook`)**: Invoke, query, sync files, and launch Deep Research from any terminal or agent bash tool.
+
+---
+
+## 💡 Use Cases & Workflows
+
+### 1. Documentary Research & Decision Support $\rightarrow$ Local Project `.md` Files *(Primary Workflow)*
+
+When your project needs **documentary research to support technical, architectural, or product decision-making**, the coding agent pilots a complete end-to-end research-to-documentation loop:
+
+```mermaid
+flowchart LR
+    A["1. Decision Need in Project"] --> B["2. Invoke Existing or Create New Gemini Notebook"]
+    B --> C["3. Run Deep Research or Query Existing Sources"]
+    C --> D["4. Synthesize Findings with Citations"]
+    D --> E["5. Write Local .md Files in Repository (docs/research/, docs/adr/)"]
+```
+
+1. **Open or Create a Notebook**: The agent either invokes an existing curated Gemini Notebook (`notebook_invoke(target="...")`) or creates a dedicated notebook for the topic (`notebook_create(title="...", attach_to_workspace=True)`).
+2. **Research or Query**:
+   - **New Documentary Research**: The agent launches `notebook_research(query="...", mode="deep", source="web", import_sources=True)` to discover, verify, and ingest external web or Google Drive sources into the notebook.
+   - **Existing Corpus Q&A**: Or the agent queries documents already curated inside the notebook via `notebook_query` and `notebook_search_sources`.
+3. **Generate Local Project Markdown Files**: Using the grounded answers, synthesized research report, and source citations returned by the notebook, the agent writes structured `.md` files directly inside your local project (e.g., `docs/research/vector-db-benchmark.md`, `docs/adr/004-auth-architecture.md`, comparative matrices, or implementation plans) that are directly tailored to your codebase.
+
+**Example Agent Prompt in Antigravity 2 / VS Code:**
+> *"We need to choose between WebSockets, SSE, and WebTransport for our real-time notification pipeline. Open our 'System Architecture' Gemini Notebook (or create a new one if needed), run a documentary research comparing latency, proxy compatibility, and scaling trade-offs, query the sources for our constraints, and create `docs/research/realtime-transport-decision.md` in the local project with your cited recommendations."*
+
+---
+
+### 2. Persistent Domain & Specification Grounding Across Coding Sessions
+Bind your project's canonical Gemini Notebook (containing PRDs, API specifications, regulatory PDFs, and design docs) once via `.agents/notebook.json`. Whenever you ask the agent to implement a feature or verify business rules, it automatically queries `notebook_query` or `notebook_search_sources` before writing code—eliminating hallucinations and keeping every answer grounded with explicit `[Notebook Title — Source Name]` citations.
+
+---
+
+### 3. Bi-Directional Knowledge Sync (Local Repo $\leftrightarrow$ Gemini Notebook)
+Keep your shared Gemini Notebook synchronized with your repository's latest architecture docs (`README.md`, `AGENTS.md`, `docs/*.md`, PDFs) using `notebook_sync_files`. What your engineering agent documents locally becomes immediately queryable in NotebookLM by product managers, researchers, and teammates.
+
+---
+
+### 4. Automated Briefings, Study Guides & Podcast Audio Overviews
+After ingesting technical documentation or completing a Deep Research session, use `notebook_generate_artifact` (`study_guide`, `briefing_doc`, `mind_map`, `quiz`, `slide_deck`) or `notebook_create_audio` (`deep-dive`, `brief`, `critique`, `debate`) to produce executive summaries and onboarding materials directly from your workspace.
 
 ---
 
@@ -159,6 +206,35 @@ agy-gemini-notebook sync README.md docs/architecture.md
 | **Studio Artifacts & Notes** | `notebook_create_audio` | Dual | Generate a podcast **Audio Overview** |
 | | `notebook_generate_artifact` | Engine 2 (RPC) | Generate a Briefing Doc, Study Guide, Mind Map, Quiz, Flashcards, or Slide Deck |
 | | `notebook_notes` | Engine 2 (RPC) | List, create, update, or delete persistent notes inside a notebook |
+
+---
+
+## 📦 Versioning & Changelog
+
+This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0` (2026-10-22) — Initial Stable Release
+
+- **Dual-Engine Architecture (`src/agy_gemini_notebook/engines/`)**:
+  - **Why & How**: Unifies official Google Cloud Enterprise provisioning (`gcp_enterprise_rest.py`, Discovery Engine `v1alpha` REST API authenticated via `gcloud auth print-access-token`) with the community RPC bridge (`rpc_bridge.py`, powered by `notebooklm-py` for consumer and enterprise `notebooklm.google.com` accounts). Automatically falls back to Engine 2 when `GCP_PROJECT_NUMBER` is not configured, ensuring zero-friction operation for both personal Google accounts and GCP organizations.
+- **Complete 20-Tool MCP Server, Resources & Prompts (`src/agy_gemini_notebook/mcp_server.py`)**:
+  - **Why & How**: Exposes the full lifecycle of a Gemini Notebook to any MCP client: workspace binding & invocation (`notebook_status`, `notebook_attach`, `notebook_invoke`), CRUD & sharing (`notebook_list`, `notebook_get`, `notebook_create`, `notebook_delete`, `notebook_rename`, `notebook_share`), local file synchronization & source management (`notebook_sync_files`, `notebook_add_source`, `notebook_delete_sources`, `notebook_search_sources`, `notebook_get_source_text`), grounded Q&A & autonomous research (`notebook_query`, `notebook_research`, `notebook_research_status`), and Studio deliverables & persistent notes (`notebook_create_audio`, `notebook_generate_artifact`, `notebook_notes`). Also registers MCP resources (`notebook://active`, `notebook://aliases`) and reusable MCP prompts (`invoke_notebook`, `deep_research_notebook`, `sync_workspace_docs`).
+- **Documentary Research for Decision Support $\rightarrow$ Local `.md` Synthesis (`skills/gemini-notebook/SKILL.md`, `rules/AGENTS.md`)**:
+  - **Why & How**: Enables the primary decision-support workflow where the agent opens an existing Gemini Notebook or creates a new one, runs documentary research (`notebook_research`) or queries curated notebook sources (`notebook_query`), and synthesizes the source-cited findings into structured local Markdown files (`docs/research/*.md`, ADRs, decision matrices) inside the active project workspace.
+- **Interactive Antigravity 2 Sidecar Panel (`sidecars/notebook_context_panel/`)**:
+  - **Why & How**: Provides an Auxiliary Pane web UI (`ui.html`) backed by a local HTTP server (`server.py`) with `/api/status`, `/api/notebooks`, `/api/attach`, `/api/toggle_source`, and `/api/create_notebook` endpoints—allowing 1-click notebook switching, source-level grounding filters, and inline notebook creation.
+- **Standalone CLI & Multi-IDE Transport (`src/agy_gemini_notebook/cli.py`, `scripts/run_mcp.sh`)**:
+  - **Why & How**: Adds the `agy-gemini-notebook` CLI (`status`, `list`, `invoke`, `attach`, `create`, `query`, `research`, `sync`, `audio`, `artifact`) and a portable MCP launcher supporting `stdio`, `sse`, and `streamable-http` transports across Google Antigravity 2, VS Code, Cursor, and Claude Code.
+- **Automated Test Suite (`tests/`)**:
+  - **Why & How**: Includes 16 comprehensive unit, mocked Dual-Engine, Sidecar HTTP API, and live MCP stdio handshake test suites verified with `pytest` and `ruff`.
+
+---
+
+## 👤 Author
+
+**Souryan Augé**
+- 🌐 Website: [https://souryan-auge.fr/](https://souryan-auge.fr/)
+- 💻 GitHub: [@Chryzalide](https://github.com/Chryzalide)
 
 ---
 
