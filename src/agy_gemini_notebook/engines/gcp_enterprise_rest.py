@@ -43,11 +43,18 @@ class GcpNotebookEnterpriseClient:
         project_number: str | None = None,
         location: str | None = None,
         endpoint_location: str | None = None,
+        engine_id: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.config = config or PluginConfig()
         self.project_number = project_number or self.config.gcp_project_number
         self.location = location or self.config.gcp_location
         self.endpoint_location = endpoint_location or self.config.gcp_endpoint_location
+        self.engine_id = engine_id or self.config.gcp_engine_id
+        self._transport = transport
+
+    def _client(self, timeout: float = 30.0) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=timeout, transport=self._transport)
 
     def _require_project(self) -> str:
         if not self.project_number:
@@ -90,7 +97,7 @@ class GcpNotebookEnterpriseClient:
     async def create_notebook(self, title: str) -> dict[str, Any]:
         """Create a new Gemini Notebook (`POST .../notebooks`)."""
         url = f"{self.base_url}/notebooks"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.post(url, headers=self._headers(), json={"title": title})
             resp.raise_for_status()
             return resp.json()
@@ -98,7 +105,7 @@ class GcpNotebookEnterpriseClient:
     async def get_notebook(self, notebook_id: str) -> dict[str, Any]:
         """Get a Gemini Notebook and its sources (`GET .../notebooks/{notebookId}`)."""
         url = f"{self.base_url}/notebooks/{notebook_id}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.get(url, headers=self._headers())
             resp.raise_for_status()
             return resp.json()
@@ -106,7 +113,7 @@ class GcpNotebookEnterpriseClient:
     async def list_recently_viewed(self, page_size: int = 50) -> list[dict[str, Any]]:
         """List recently viewed notebooks (`GET .../notebooks:listRecentlyViewed`)."""
         url = f"{self.base_url}/notebooks:listRecentlyViewed"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.get(
                 url,
                 headers=self._headers(),
@@ -125,7 +132,7 @@ class GcpNotebookEnterpriseClient:
             for n in notebook_ids
         ]
         url = f"{self.base_url}/notebooks:batchDelete"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.post(url, headers=self._headers(), json={"names": names})
             resp.raise_for_status()
             return resp.json()
@@ -150,7 +157,7 @@ class GcpNotebookEnterpriseClient:
             "accountAndRoles": [{"email": email, "role": role}],
             "notifyViaEmail": notify_via_email,
         }
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.post(url, headers=self._headers(), json=payload)
             resp.raise_for_status()
             return resp.json()
@@ -173,7 +180,7 @@ class GcpNotebookEnterpriseClient:
         - `{"googleDriveContent": {"documentId": "...", "mimeType": "application/vnd.google-apps.document", "sourceName": "Spec"}}`
         """
         url = f"{self.base_url}/notebooks/{notebook_id}/sources:batchCreate"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with self._client(timeout=60.0) as client:
             resp = await client.post(
                 url,
                 headers=self._headers(),
@@ -210,7 +217,7 @@ class GcpNotebookEnterpriseClient:
                 "Content-Type": content_type,
             }
         )
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with self._client(timeout=120.0) as client:
             resp = await client.post(url, headers=headers, content=raw_bytes)
             resp.raise_for_status()
             return resp.json()
@@ -218,7 +225,7 @@ class GcpNotebookEnterpriseClient:
     async def get_source(self, notebook_id: str, source_id: str) -> dict[str, Any]:
         """Get metadata and ingestion status of a source (`GET .../sources/{sourceId}`)."""
         url = f"{self.base_url}/notebooks/{notebook_id}/sources/{source_id}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.get(url, headers=self._headers())
             resp.raise_for_status()
             return resp.json()
@@ -236,7 +243,7 @@ class GcpNotebookEnterpriseClient:
             for s in source_ids
         ]
         url = f"{self.base_url}/notebooks/{notebook_id}/sources:batchDelete"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.post(url, headers=self._headers(), json={"names": names})
             resp.raise_for_status()
             return resp.json()
@@ -262,7 +269,7 @@ class GcpNotebookEnterpriseClient:
         if source_ids:
             generation_options["sourceIds"] = [{"id": sid} for sid in source_ids]
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with self._client(timeout=60.0) as client:
             resp = await client.post(
                 url,
                 headers=self._headers(),
@@ -278,7 +285,63 @@ class GcpNotebookEnterpriseClient:
     ) -> dict[str, Any]:
         """Delete an Audio Overview (`DELETE .../audioOverviews/{audioOverviewId}`)."""
         url = f"{self.base_url}/notebooks/{notebook_id}/audioOverviews/{audio_overview_id}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with self._client(timeout=30.0) as client:
             resp = await client.delete(url, headers=self._headers())
             resp.raise_for_status()
             return resp.json()
+
+    # -------------------------------------------------------------------------
+    # Optional Enterprise Grounded Q&A (`servingConfigs:answer`)
+    # -------------------------------------------------------------------------
+
+    async def query_enterprise(
+        self,
+        question: str,
+        engine_id: str | None = None,
+        serving_config_id: str = "default_search",
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Execute a grounded Enterprise Q&A call via Discovery Engine `servingConfigs:answer`.
+
+        Used when running in a pure Google Cloud Enterprise environment (`GCP_ENGINE_ID` set)
+        without browser cookies.
+        """
+        target_engine = engine_id or self.engine_id
+        if not target_engine:
+            raise ValueError(
+                "GCP_ENGINE_ID is required for pure REST Discovery Engine `servingConfigs:answer` queries."
+            )
+        url = (
+            f"{self.base_url}/collections/default_collection"
+            f"/engines/{target_engine}/servingConfigs/{serving_config_id}:answer"
+        )
+        payload: dict[str, Any] = {
+            "query": {"text": question},
+            "answerGenerationSpec": {
+                "includeCitations": True,
+                "ignoreAdversarialQuery": True,
+                "ignoreNonAnswerSeekingQuery": False,
+            },
+        }
+        if session_id:
+            payload["session"] = session_id
+
+        async with self._client(timeout=60.0) as client:
+            resp = await client.post(url, headers=self._headers(), json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+        answer_obj = data.get("answer", {})
+        answer_text = answer_obj.get("answerText", "")
+        citations = answer_obj.get("citations", [])
+        references = answer_obj.get("references", [])
+        return {
+            "status": "ok",
+            "engine": "gcp_enterprise_rest",
+            "engine_id": target_engine,
+            "question": question,
+            "answer": answer_text,
+            "citations": citations,
+            "references": references,
+            "raw": data,
+        }

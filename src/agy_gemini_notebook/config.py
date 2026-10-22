@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field
 
 
 class WorkspaceNotebookBinding(BaseModel):
-    """Represents the Gemini Notebook attached to an Antigravity 2 workspace."""
+    """Represents the Gemini Notebook attached to an Antigravity 2 or VS Code workspace."""
 
-    notebook_id: str = Field(..., description="Unique ID of the attached Gemini Notebook")
+    notebook_id: str = Field(..., description="Unique ID of the primary attached Gemini Notebook")
     title: str | None = Field(default=None, description="Human-readable notebook title")
     engine: str = Field(
         default="auto",
@@ -24,9 +24,17 @@ class WorkspaceNotebookBinding(BaseModel):
         default_factory=list,
         description="Optional filter of active source IDs within the notebook (empty = all)",
     )
+    aliases: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional mapping of short alias names to notebook IDs for multi-notebook workspaces",
+    )
     gcp_project_number: str | None = Field(default=None)
     gcp_location: str = Field(default="global")
     gcp_endpoint_location: str = Field(default="global")
+    gcp_engine_id: str | None = Field(
+        default=None,
+        description="Optional Discovery Engine app/engine ID for Enterprise Grounded Q&A",
+    )
 
 
 class PluginConfig(BaseModel):
@@ -43,6 +51,17 @@ class PluginConfig(BaseModel):
     )
     gcp_access_token: str | None = Field(
         default_factory=lambda: os.environ.get("GCP_ACCESS_TOKEN")
+    )
+    gcp_engine_id: str | None = Field(
+        default_factory=lambda: (
+            os.environ.get("GCP_ENGINE_ID") or os.environ.get("GCP_DATA_STORE_ID")
+        )
+    )
+    notebooklm_profile: str | None = Field(
+        default_factory=lambda: os.environ.get("NOTEBOOKLM_PROFILE")
+    )
+    notebooklm_storage_path: str | None = Field(
+        default_factory=lambda: os.environ.get("NOTEBOOKLM_STORAGE_PATH")
     )
 
     def get_gcloud_token(self) -> str:
@@ -65,9 +84,26 @@ class PluginConfig(BaseModel):
             ) from exc
 
 
+def resolve_workspace_dir(workspace_dir: str | Path | None = None) -> Path:
+    """Resolve the active workspace directory across Antigravity 2, VS Code, or CLI."""
+    if workspace_dir:
+        return Path(workspace_dir).expanduser().resolve()
+    env_ws = os.environ.get("AGY_WORKSPACE_DIR") or os.environ.get("VSCODE_WORKSPACE_FOLDER")
+    if env_ws:
+        return Path(env_ws).expanduser().resolve()
+
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / ".agents" / "notebook.json").is_file():
+            return candidate
+        if (candidate / ".git").exists():
+            return candidate
+    return cwd
+
+
 def get_binding_path(workspace_dir: str | Path | None = None) -> Path:
     """Return the path to `.agents/notebook.json` inside the target workspace."""
-    base = Path(workspace_dir) if workspace_dir else Path.cwd()
+    base = Path(workspace_dir) if workspace_dir else resolve_workspace_dir()
     return base / ".agents" / "notebook.json"
 
 
@@ -106,15 +142,23 @@ def describe_environment(workspace_dir: str | Path | None = None) -> dict[str, A
     except RuntimeError:
         has_gcloud_token = False
 
+    project_num = cfg.gcp_project_number or (binding.gcp_project_number if binding else None)
+    engine_id = cfg.gcp_engine_id or (binding.gcp_engine_id if binding else None)
+
     return {
-        "workspace_dir": str(Path(workspace_dir) if workspace_dir else Path.cwd()),
+        "workspace_dir": str(Path(workspace_dir) if workspace_dir else resolve_workspace_dir()),
         "binding_file": str(get_binding_path(workspace_dir)),
         "attached_notebook": binding.model_dump() if binding else None,
         "gcp_enterprise_rest": {
-            "configured": bool(cfg.gcp_project_number or (binding and binding.gcp_project_number)),
-            "project_number": cfg.gcp_project_number or (binding.gcp_project_number if binding else None),
-            "location": cfg.gcp_location,
-            "endpoint_location": cfg.gcp_endpoint_location,
+            "configured": bool(project_num),
+            "project_number": project_num,
+            "location": binding.gcp_location if binding and binding.gcp_location else cfg.gcp_location,
+            "endpoint_location": (
+                binding.gcp_endpoint_location
+                if binding and binding.gcp_endpoint_location
+                else cfg.gcp_endpoint_location
+            ),
+            "engine_id": engine_id,
             "gcloud_authenticated": has_gcloud_token,
         },
     }

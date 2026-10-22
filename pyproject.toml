@@ -31,6 +31,7 @@ dev = [
 
 [project.scripts]
 agy-gemini-notebook-mcp = "agy_gemini_notebook.mcp_server:main"
+agy-gemini-notebook = "agy_gemini_notebook.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agy_gemini_notebook"]

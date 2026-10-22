@@ -4,63 +4,64 @@ This document tracks the remaining engineering, testing, and integration tasks r
 
 ---
 
-## 1. Complete Dual-Engine Fallback (`rpc_bridge.py` & `mcp_server.py`)
+## 1. Complete Dual-Engine Fallback (`rpc_bridge.py` & `mcp_server.py`) — ✅ COMPLETED
 
-Currently, `GcpNotebookEnterpriseClient` (`src/agy_gemini_notebook/engines/gcp_enterprise_rest.py`) implements the full Google Cloud Discovery Engine `v1alpha` REST API, while `NotebookRpcBridge` (`src/agy_gemini_notebook/engines/rpc_bridge.py`) only implements `list_notebooks`, `query_notebook`, and `get_source_fulltext`.
+`GcpNotebookEnterpriseClient` (`src/agy_gemini_notebook/engines/gcp_enterprise_rest.py`) and `NotebookRpcBridge` (`src/agy_gemini_notebook/engines/rpc_bridge.py`) now provide full Dual-Engine parity, multi-IDE portability (Antigravity 2, VS Code, Cursor, Claude Code), and autonomous notebook piloting (including **Fast Research**, **Deep Research**, and **Studio Artifacts**).
 
 ### Tasks:
-- [ ] **Inspect `notebooklm-py` SDK signatures**:
-  - Initialize the local virtual environment (`uv sync --all-extras`) and verify the exact async methods and return objects exposed by `notebooklm.NotebookLMClient` (`notebooks`, `sources`, `chat`, `artifacts` / audio generation).
-- [ ] **Expand `NotebookRpcBridge` (`src/agy_gemini_notebook/engines/rpc_bridge.py`)**:
-  - Implement `get_notebook(notebook_id)` (returning notebook metadata + normalized source list).
-  - Implement `create_notebook(title)` for personal Google accounts (`notebooklm.google.com`).
-  - Implement `upload_file_source(notebook_id, file_path)` via `notebooklm-py`.
-  - Implement `add_source(notebook_id, source_type, value, title)` (text, web URL, YouTube, Google Drive) via `notebooklm-py`.
-  - Implement `create_audio_overview(notebook_id, episode_focus, language_code, source_ids)` via `notebooklm-py`.
-- [ ] **Unify Engine Routing in `mcp_server.py` (`src/agy_gemini_notebook/mcp_server.py`)**:
-  - Update `notebook_get`, `notebook_create`, `notebook_sync_files`, `notebook_add_source`, and `notebook_create_audio` so they automatically fall back to `NotebookRpcBridge` when `GCP_PROJECT_NUMBER` is not configured (or when `binding.engine == "rpc_bridge"`).
-- [ ] **Add Enterprise Grounded Q&A Option (Optional)**:
-  - Investigate pairing `GcpNotebookEnterpriseClient` with Discovery Engine's `servingConfigs:streamAnswer` / `conversations:converse` endpoint when running in a pure Google Cloud Enterprise environment without browser cookies.
+- [x] **Inspect `notebooklm-py` SDK signatures**:
+  - Initialized the local virtual environment (`.venv`) and verified exact async methods and return objects exposed by `notebooklm.NotebookLMClient` (`notebooks`, `sources`, `chat`, `research`, `artifacts`, `notes`, `sharing`).
+- [x] **Expand `NotebookRpcBridge` (`src/agy_gemini_notebook/engines/rpc_bridge.py`)**:
+  - Implemented `get_notebook(notebook_id)`, `create_notebook(title)`, `delete_notebooks(notebook_ids)`, `rename_notebook(notebook_id, new_title)`, and `share_notebook(notebook_id, public, email, role)`.
+  - Implemented `upload_file_source(notebook_id, file_path)`, `add_source(notebook_id, source_type, value, title)`, `delete_sources(notebook_id, source_ids)`, and `search_sources(notebook_id, query)`.
+  - Implemented `run_research(notebook_id, query, mode="fast"|"deep"|"discover", source="web"|"drive", auto_import=True)`, `poll_research(...)`, and `cancel_research(...)` for autonomous Deep Research and source discovery.
+  - Implemented `create_audio_overview(...)`, `generate_artifact(...)` (briefing doc, study guide, mind map, quiz, flashcards, slide deck), and `manage_notes(...)`.
+- [x] **Unify Engine Routing & Multi-Environment Support in `mcp_server.py` & `cli.py`**:
+  - Unified routing via `_select_engine()` across all 20 MCP tools (`notebook_status`, `notebook_attach`, `notebook_invoke`, `notebook_list`, `notebook_get`, `notebook_create`, `notebook_delete`, `notebook_rename`, `notebook_share`, `notebook_sync_files`, `notebook_add_source`, `notebook_delete_sources`, `notebook_search_sources`, `notebook_get_source_text`, `notebook_query`, `notebook_research`, `notebook_research_status`, `notebook_create_audio`, `notebook_generate_artifact`, `notebook_notes`).
+  - Added MCP Resources (`notebook://status`, `notebook://active`, `notebook://info/{target}`) and MCP Prompts (`invoke_notebook`, `deep_research_notebook`) plus `--transport stdio|sse|streamable-http` support and portable `scripts/run_mcp.sh` + `agy-gemini-notebook` CLI (`src/agy_gemini_notebook/cli.py`).
+- [x] **Add Enterprise Grounded Q&A Option**:
+  - Implemented `GcpNotebookEnterpriseClient.query_enterprise()` pairing Engine 1 with Discovery Engine's `servingConfigs:answer` endpoint when `GCP_ENGINE_ID` is configured.
 
 ---
 
-## 2. Make the Sidecar UI Panel Interactive (`sidecars/notebook_context_panel/`)
+## 2. Make the Sidecar UI Panel Interactive (`sidecars/notebook_context_panel/`) — ✅ COMPLETED
 
-Currently, `sidecars/notebook_context_panel/server.py` is a static file server and `ui.html` is a static status card.
+`sidecars/notebook_context_panel/server.py` and `sidecars/notebook_context_panel/ui.html` now provide a full interactive Auxiliary Pane sidecar backed by a multithreaded local JSON API server.
 
 ### Tasks:
-- [ ] **Upgrade `sidecars/notebook_context_panel/server.py`**:
-  - Add JSON API endpoints to the local HTTP server:
-    - `GET /api/status` — Returns `describe_environment()` + active `.agents/notebook.json` binding.
-    - `GET /api/notebooks` — Lists available notebooks from the active engine (`gcp_enterprise_rest` or `rpc_bridge`).
-    - `GET /api/notebook?id=<notebook_id>` — Fetches the sources inside the selected notebook.
+- [x] **Upgrade `sidecars/notebook_context_panel/server.py`**:
+  - Added JSON API endpoints to the local `ThreadingHTTPServer`:
+    - `GET /api/status` — Returns `describe_environment()` + `rpc_bridge` auth status + active `.agents/notebook.json` binding + discovered workspace documentation files.
+    - `GET /api/notebooks` — Lists and normalizes available notebooks from the active engine (`gcp_enterprise_rest` or `rpc_bridge`).
+    - `GET /api/notebook?id=<notebook_id>` — Fetches and normalizes notebook metadata, AI summary, and sources inside the selected notebook.
     - `POST /api/attach` — Saves the selected `notebook_id`, `title`, and `active_source_ids` to `.agents/notebook.json`.
-    - `POST /api/sources/toggle` — Updates `active_source_ids` in `.agents/notebook.json` when a user checks or unchecks sources in the UI.
-- [ ] **Upgrade `sidecars/notebook_context_panel/ui.html`**:
-  - Add client-side JavaScript (`fetch`) to:
-    - Display live authentication status for Engine 1 (GCP REST `v1alpha`) and Engine 2 (RPC Bridge).
-    - Render a dropdown/list to switch the active workspace notebook in 1 click.
-    - Render checkboxes for each source in the active notebook so users can filter which sources ground the agent's responses.
-    - Provide a "Sync Workspace Docs" quick action button.
+    - `POST /api/sources/toggle` — Updates `active_source_ids` in `.agents/notebook.json` when a user checks or unchecks sources (or resets to all sources) in the UI.
+    - `POST /api/sync` & `POST /api/create` — Uploads selected workspace documentation files and creates/attaches new notebooks directly from the Sidecar UI.
+- [x] **Upgrade `sidecars/notebook_context_panel/ui.html`**:
+  - Added client-side JavaScript (`fetch`) and accessible dark/light UI controls to:
+    - Display live authentication status for Engine 1 (GCP REST `v1alpha`) and Engine 2 (RPC Bridge) with an engine mode selector.
+    - Render a 1-click notebook switcher dropdown (`#notebook-select`) and inline "+ Create" notebook action.
+    - Render accessible custom checkboxes (`.checkbox-custom` with indeterminate "Select all" state) for each source in the active notebook so users can filter which sources ground the agent's responses.
+    - Provide a "Sync Workspace Docs" quick action card with selectable workspace documentation chips.
 
 ---
 
-## 3. Dependency Setup, Linting & Unit Test Suite (`tests/`)
+## 3. Dependency Setup, Linting & Unit Test Suite (`tests/`) — ✅ COMPLETED
 
 ### Tasks:
-- [ ] **Initialize `uv` Lockfile & Virtual Environment**:
-  - Run `uv sync --all-extras` and verify clean installation of `mcp`, `httpx`, `pydantic`, `notebooklm-py`, `pytest`, `pytest-asyncio`, and `ruff`.
-- [ ] **Expand `tests/test_gcp_enterprise_rest.py`**:
-  - Add async unit tests using `httpx.MockTransport` covering:
+- [x] **Initialize `uv` Lockfile & Virtual Environment**:
+  - Initialized `.venv` and verified clean installation of `mcp`, `httpx`, `pydantic`, `notebooklm-py`, `pytest`, `pytest-asyncio`, and `ruff`.
+- [x] **Expand `tests/test_gcp_enterprise_rest.py`**:
+  - Added async unit tests using `httpx.MockTransport` covering:
     - `create_notebook`, `get_notebook`, `list_recently_viewed`, `batch_delete_notebooks`, `share_notebook`.
-    - `batch_create_sources` (text, web, YouTube, Google Drive payloads).
-    - `upload_file_source` (verifying ` /upload/v1alpha/.../sources:uploadFile`, `X-Goog-Upload-Protocol: raw`, `X-Goog-Upload-File-Name`, and MIME type resolution).
-    - `create_audio_overview` & `delete_audio_overview`.
-- [ ] **Add `tests/test_rpc_bridge.py` & `tests/test_mcp_server.py`**:
-  - Mock `NotebookLMClient` to test Dual-Engine routing and fallback behavior across all 10 MCP tools.
-  - Add unit tests for `sidecars/notebook_context_panel/server.py` JSON endpoints.
-- [ ] **Run Ruff & Pytest**:
-  - Ensure `uv run ruff check .` and `uv run pytest` pass with 0 warnings/errors.
+    - `batch_create_sources` (text, web, YouTube, Google Drive payloads), `get_source`, and `batch_delete_sources`.
+    - `upload_file_source` (verifying `/upload/v1alpha/.../sources:uploadFile`, `X-Goog-Upload-Protocol: raw`, `X-Goog-Upload-File-Name`, and MIME type resolution across `.md`, `.pdf`, `.pptx`, `.mp3`, `.png`).
+    - `create_audio_overview`, `delete_audio_overview`, `query_enterprise`, and MCP tool routing when `GCP_PROJECT_NUMBER` is configured.
+- [x] **Add `tests/test_rpc_bridge_and_mcp.py` & `tests/test_sidecar_server.py`**:
+  - Mocked `NotebookLMClient` to test Dual-Engine routing, fallback behavior, Deep Research, Studio artifacts, MCP resources/prompts, and CLI `_dispatch` across MCP tools.
+  - Added unit and HTTP integration tests for `sidecars/notebook_context_panel/server.py` JSON endpoints and `ui.html`.
+- [x] **Run Ruff & Pytest**:
+  - Verified `.venv/bin/ruff check .` (`All checks passed!`) and `.venv/bin/pytest` (`15 passed`, 0 warnings/errors).
 
 ---
 

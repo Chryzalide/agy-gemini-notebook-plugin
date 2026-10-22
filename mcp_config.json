@@ -1,12 +1,9 @@
 {
   "mcpServers": {
     "gemini_notebook_mcp": {
-      "command": "uv",
+      "command": "bash",
       "args": [
-        "run",
-        "--project",
-        ".",
-        "agy-gemini-notebook-mcp"
+        "scripts/run_mcp.sh"
       ]
     }
   }

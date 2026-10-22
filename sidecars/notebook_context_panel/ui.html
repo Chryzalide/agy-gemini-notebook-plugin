@@ -9,42 +9,133 @@
       color-scheme: dark light;
       --bg: #131314;
       --card: #1e1f20;
+      --card-elevated: #282a2c;
       --border: #333537;
       --text: #e3e3e3;
       --muted: #9aa0a6;
       --accent: #8ab4f8;
+      --accent-strong: #1a73e8;
       --success: #81c995;
+      --warning: #fdd663;
+      --danger: #f28b82;
+      --icon-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'></polyline></svg>");
+      --icon-dash: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'><line x1='5' y1='12' x2='19' y2='12'></line></svg>");
     }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8f9fa;
+        --card: #ffffff;
+        --card-elevated: #f1f3f4;
+        --border: #dadce0;
+        --text: #202124;
+        --muted: #5f6368;
+        --accent: #1a73e8;
+        --accent-strong: #1557b0;
+        --success: #188038;
+        --warning: #b06000;
+        --danger: #c5221f;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      padding: 16px;
+      padding: 14px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 1.45;
+      accent-color: var(--accent);
     }
+
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
     }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .header h1 {
       font-size: 15px;
       margin: 0;
       font-weight: 600;
     }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       font-size: 11px;
       padding: 2px 8px;
       border-radius: 999px;
-      background: rgba(138, 180, 248, 0.15);
+      background: rgba(138, 180, 248, 0.14);
       color: var(--accent);
       border: 1px solid rgba(138, 180, 248, 0.3);
+      font-weight: 500;
+      white-space: nowrap;
     }
+
+    .badge.ok {
+      background: rgba(129, 201, 149, 0.14);
+      color: var(--success);
+      border-color: rgba(129, 201, 149, 0.35);
+    }
+
+    .badge.warn {
+      background: rgba(253, 214, 99, 0.14);
+      color: var(--warning);
+      border-color: rgba(253, 214, 99, 0.35);
+    }
+
+    .badge.err {
+      background: rgba(242, 139, 130, 0.14);
+      color: var(--danger);
+      border-color: rgba(242, 139, 130, 0.35);
+    }
+
+    .icon-btn {
+      background: var(--card-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+
+    .icon-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .icon-btn:focus-visible,
+    .btn:focus-visible,
+    .select-input:focus-visible,
+    .text-input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
     .card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -52,51 +143,943 @@
       padding: 12px;
       margin-bottom: 12px;
     }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
     .card h2 {
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--muted);
-      margin: 0 0 8px 0;
+      margin: 0;
+      font-weight: 600;
     }
+
+    .engine-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .engine-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .engine-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .engine-name {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .engine-sub {
+      font-size: 11px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      align-items: center;
+    }
+
+    .select-input,
+    .text-input {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card-elevated);
+      color: var(--text);
+      font-size: 12px;
+    }
+
     .btn {
       width: 100%;
       padding: 8px 12px;
       border-radius: 6px;
       border: 1px solid var(--border);
-      background: #282a2c;
+      background: var(--card-elevated);
       color: var(--text);
       cursor: pointer;
       font-weight: 500;
+      font-size: 12px;
       margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-    .btn:hover {
+
+    .btn.primary {
+      background: rgba(138, 180, 248, 0.16);
+      border-color: rgba(138, 180, 248, 0.4);
+      color: var(--accent);
+    }
+
+    .btn.inline {
+      width: auto;
+      margin-top: 0;
+      white-space: nowrap;
+    }
+
+    .btn:hover:not(:disabled) {
       border-color: var(--accent);
     }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .active-summary {
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .active-title {
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .active-id {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+      word-break: break-all;
+    }
+
+    /* Accessible custom checkbox following modern-web-guidance */
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      min-block-size: 44px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+
+    .checkbox-label:hover {
+      background: var(--card-elevated);
+      border-color: var(--border);
+    }
+
+    .checkbox-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .checkbox-custom {
+      --checkbox-size: 1.25em;
+      --checkbox-icon-size: 0.7em;
+
+      appearance: none;
+      display: inline-grid;
+      place-content: center;
+      inline-size: var(--checkbox-size);
+      aspect-ratio: 1;
+      margin: 0;
+      border: 2px solid currentColor;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .checkbox-custom::before {
+      content: "";
+      inline-size: var(--checkbox-icon-size);
+      aspect-ratio: 1;
+      background-color: currentColor;
+      -webkit-mask: var(--checkbox-icon) no-repeat center / contain;
+      mask: var(--checkbox-icon) no-repeat center / contain;
+      scale: 0;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .checkbox-custom::before {
+        transition: scale 150ms ease;
+      }
+    }
+
+    @media (forced-colors: active) {
+      .checkbox-custom::before {
+        background-color: CanvasText;
+      }
+    }
+
+    .checkbox-custom:checked {
+      --checkbox-icon: var(--icon-check);
+    }
+
+    .checkbox-custom:indeterminate {
+      --checkbox-icon: var(--icon-dash);
+    }
+
+    .checkbox-custom:is(:checked, :indeterminate)::before {
+      scale: 1;
+    }
+
+    .checkbox-custom:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
+    }
+
+    .checkbox-custom:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .source-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 260px;
+      overflow-y: auto;
+      margin-top: 4px;
+    }
+
+    .source-title {
+      font-size: 12px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .source-meta {
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .select-all-bar {
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+      padding-bottom: 2px;
+    }
+
+    details.summary-box {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    details.summary-box summary {
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .doc-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+
+    .doc-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-block-size: 36px;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--card-elevated);
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    @supports not (accent-color: var(--accent)) {
+      input[type="checkbox"]:not(.checkbox-custom):focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+    }
+
+    .status-toast {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card-elevated);
+      font-size: 12px;
+      color: var(--muted);
+      display: none;
+    }
+
+    .status-toast.visible {
+      display: block;
+    }
+
+    .status-toast.ok {
+      color: var(--success);
+      border-color: rgba(129, 201, 149, 0.35);
+    }
+
+    .status-toast.err {
+      color: var(--danger);
+      border-color: rgba(242, 139, 130, 0.35);
+    }
+
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--accent);
+    }
+
+    .muted-note {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 6px 0;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>📓 Gemini Notebook</h1>
-    <span class="badge">Dual-Engine v0.1</span>
-  </div>
-
-  <div class="card">
-    <h2>Active Notebook (.agents/notebook.json)</h2>
-    <div id="active-notebook">
-      No notebook attached. Use <code>notebook_attach</code> in the Antigravity 2 chat.
+    <div class="header-title">
+      <h1>📓 Gemini Notebook</h1>
+      <span id="active-engine-badge" class="badge">Dual-Engine v0.1</span>
+    </div>
+    <div class="header-actions">
+      <button id="refresh-btn" class="icon-btn" type="button" title="Refresh status and notebooks">
+        ↻ Refresh
+      </button>
     </div>
   </div>
 
+  <!-- 1. Live Engine Status Card -->
   <div class="card">
-    <h2>Available Engines</h2>
-    <div>• <strong>GCP REST v1alpha</strong>: CRUD, Upload &amp; Audio Overviews</div>
-    <div>• <strong>RPC Bridge</strong>: Grounded RAG Q&amp;A &amp; Full-Text</div>
+    <div class="card-header">
+      <h2>Available Engines (Live Auth)</h2>
+      <select id="engine-select" class="select-input" style="width: auto; padding: 3px 8px;" aria-label="Preferred engine">
+        <option value="auto">Auto Route</option>
+        <option value="gcp_rest">GCP REST v1alpha</option>
+        <option value="rpc_bridge">RPC Bridge</option>
+      </select>
+    </div>
+    <div class="engine-grid">
+      <div class="engine-row">
+        <div class="engine-meta">
+          <span class="engine-name">Engine 1 • GCP REST v1alpha</span>
+          <span id="gcp-engine-sub" class="engine-sub">Checking Google Cloud project &amp; token…</span>
+        </div>
+        <span id="gcp-engine-badge" class="badge">Checking…</span>
+      </div>
+      <div class="engine-row">
+        <div class="engine-meta">
+          <span class="engine-name">Engine 2 • RPC Bridge</span>
+          <span id="rpc-engine-sub" class="engine-sub">Checking notebooklm-py session…</span>
+        </div>
+        <span id="rpc-engine-badge" class="badge">Checking…</span>
+      </div>
+    </div>
   </div>
+
+  <!-- 2. Active Workspace Notebook & 1-Click Switcher -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Active Notebook (.agents/notebook.json)</h2>
+      <span id="binding-status-badge" class="badge">Unattached</span>
+    </div>
+
+    <div id="active-notebook" class="active-summary">
+      <div class="active-title">
+        <span id="active-notebook-title">No notebook attached</span>
+      </div>
+      <div id="active-notebook-id" class="active-id">
+        Select a notebook below or use <code>notebook_attach</code> in chat.
+      </div>
+    </div>
+
+    <label for="notebook-select" class="engine-sub" style="display:block; margin-bottom: 4px;">
+      Switch active workspace notebook (1-click):
+    </label>
+    <div class="field-row" style="margin-top: 0;">
+      <select id="notebook-select" class="select-input" aria-label="Select active workspace notebook">
+        <option value="">— Loading available notebooks… —</option>
+      </select>
+    </div>
+
+    <div class="field-row">
+      <input
+        id="create-notebook-input"
+        class="text-input"
+        type="text"
+        placeholder="New notebook title…"
+        aria-label="New notebook title"
+      />
+      <button id="create-notebook-btn" class="btn inline primary" type="button">
+        + Create
+      </button>
+    </div>
+  </div>
+
+  <!-- 3. Grounding Source Filter (Checkboxes) -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Grounding Sources Filter</h2>
+      <span id="sources-count-badge" class="badge">0 sources</span>
+    </div>
+
+    <div id="select-all-container" class="select-all-bar" style="display: none;">
+      <label class="checkbox-label" for="select-all-sources">
+        <span class="checkbox-left">
+          <input id="select-all-sources" type="checkbox" class="checkbox-custom" checked />
+          <span class="source-title">All notebook sources active</span>
+        </span>
+        <span id="active-filter-hint" class="source-meta">No filter</span>
+      </label>
+    </div>
+
+    <div id="sources-list" class="source-list">
+      <div class="muted-note">Attach a notebook to inspect and filter its grounding sources.</div>
+    </div>
+
+    <details id="notebook-summary-details" class="summary-box" style="display: none;">
+      <summary>Notebook AI Overview</summary>
+      <p id="notebook-summary-text" style="margin: 6px 0 0 0; color: var(--muted);"></p>
+    </details>
+  </div>
+
+  <!-- 4. Sync Workspace Docs Quick Action -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Workspace Quick Actions</h2>
+      <span class="badge">Upload to Notebook</span>
+    </div>
+    <div class="engine-sub">Select workspace documentation files to sync into the active notebook:</div>
+    <div id="workspace-docs-list" class="doc-chips"></div>
+    <button id="sync-docs-btn" class="btn primary" type="button">
+      ⬆ Sync Workspace Docs
+    </button>
+  </div>
+
+  <div id="status-toast" class="status-toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const state = {
+      engine: "auto",
+      attachedNotebook: null,
+      notebooks: [],
+      sources: [],
+      activeSourceIds: [],
+      workspaceDocs: [],
+    };
+
+    const els = {
+      activeEngineBadge: document.getElementById("active-engine-badge"),
+      refreshBtn: document.getElementById("refresh-btn"),
+      engineSelect: document.getElementById("engine-select"),
+      gcpSub: document.getElementById("gcp-engine-sub"),
+      gcpBadge: document.getElementById("gcp-engine-badge"),
+      rpcSub: document.getElementById("rpc-engine-sub"),
+      rpcBadge: document.getElementById("rpc-engine-badge"),
+      bindingBadge: document.getElementById("binding-status-badge"),
+      activeTitle: document.getElementById("active-notebook-title"),
+      activeId: document.getElementById("active-notebook-id"),
+      notebookSelect: document.getElementById("notebook-select"),
+      createInput: document.getElementById("create-notebook-input"),
+      createBtn: document.getElementById("create-notebook-btn"),
+      sourcesCountBadge: document.getElementById("sources-count-badge"),
+      selectAllContainer: document.getElementById("select-all-container"),
+      selectAllCheckbox: document.getElementById("select-all-sources"),
+      activeFilterHint: document.getElementById("active-filter-hint"),
+      sourcesList: document.getElementById("sources-list"),
+      summaryDetails: document.getElementById("notebook-summary-details"),
+      summaryText: document.getElementById("notebook-summary-text"),
+      docsList: document.getElementById("workspace-docs-list"),
+      syncDocsBtn: document.getElementById("sync-docs-btn"),
+      toast: document.getElementById("status-toast"),
+    };
+
+    function showToast(message, variant = "ok") {
+      els.toast.textContent = message;
+      els.toast.className = `status-toast visible ${variant}`;
+    }
+
+    async function fetchJson(url, options = {}) {
+      const resp = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.status === "error") {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+      }
+      return data;
+    }
+
+    function renderEngineStatus(statusData) {
+      const gcp = statusData.gcp_enterprise_rest || {};
+      const rpc = statusData.rpc_bridge || {};
+      const selected = statusData.selected_engine || "rpc_bridge";
+
+      els.activeEngineBadge.textContent =
+        selected === "gcp_enterprise_rest" ? "GCP REST v1alpha" : "RPC Bridge";
+
+      if (gcp.configured && gcp.gcloud_authenticated) {
+        els.gcpBadge.textContent = "Authenticated";
+        els.gcpBadge.className = "badge ok";
+        els.gcpSub.textContent = `Project ${gcp.project_number} (${gcp.location || "global"})`;
+      } else if (gcp.configured) {
+        els.gcpBadge.textContent = "Token Needed";
+        els.gcpBadge.className = "badge warn";
+        els.gcpSub.textContent = `Project ${gcp.project_number} • run gcloud auth login`;
+      } else {
+        els.gcpBadge.textContent = "Not Configured";
+        els.gcpBadge.className = "badge";
+        els.gcpSub.textContent = "Set GCP_PROJECT_NUMBER for Enterprise REST";
+      }
+
+      if (rpc.notebooklm_py_installed && rpc.has_saved_session) {
+        els.rpcBadge.textContent = "Authenticated";
+        els.rpcBadge.className = "badge ok";
+        els.rpcSub.textContent = `Profile: ${rpc.profile || "default"} • Grounded Q&A ready`;
+      } else if (rpc.notebooklm_py_installed) {
+        els.rpcBadge.textContent = "Login Needed";
+        els.rpcBadge.className = "badge warn";
+        els.rpcSub.textContent = "Run `notebooklm login` to authenticate session";
+      } else {
+        els.rpcBadge.textContent = "Unavailable";
+        els.rpcBadge.className = "badge err";
+        els.rpcSub.textContent = "Install notebooklm-py (`uv sync --extra rpc`)";
+      }
+    }
+
+    function renderWorkspaceBinding(binding) {
+      state.attachedNotebook = binding;
+      if (!binding || !binding.notebook_id) {
+        els.bindingBadge.textContent = "Unattached";
+        els.bindingBadge.className = "badge warn";
+        els.activeTitle.textContent = "No notebook attached";
+        els.activeId.innerHTML =
+          'Select a notebook below or use <code>notebook_attach</code> in the Antigravity 2 chat.';
+        els.syncDocsBtn.disabled = true;
+        return;
+      }
+
+      state.activeSourceIds = Array.isArray(binding.active_source_ids)
+        ? [...binding.active_source_ids]
+        : [];
+      els.bindingBadge.textContent = "Attached";
+      els.bindingBadge.className = "badge ok";
+      els.activeTitle.textContent = binding.title || binding.notebook_id;
+      const filterDesc =
+        state.activeSourceIds.length === 0
+          ? "all sources active"
+          : `${state.activeSourceIds.length} source(s) filtered`;
+      els.activeId.textContent = `ID: ${binding.notebook_id} • ${filterDesc}`;
+      els.syncDocsBtn.disabled = false;
+
+      if (binding.engine && ["auto", "gcp_rest", "rpc_bridge"].includes(binding.engine)) {
+        state.engine = binding.engine;
+        els.engineSelect.value = binding.engine;
+      }
+    }
+
+    function renderWorkspaceDocs(docs) {
+      state.workspaceDocs = Array.isArray(docs) ? docs : [];
+      els.docsList.innerHTML = "";
+      if (state.workspaceDocs.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "muted-note";
+        empty.textContent = "No markdown docs detected in workspace root.";
+        els.docsList.appendChild(empty);
+        return;
+      }
+
+      for (const docPath of state.workspaceDocs) {
+        const label = document.createElement("label");
+        label.className = "doc-chip";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.className = "checkbox-custom";
+        input.value = docPath;
+        input.checked = true;
+        const span = document.createElement("span");
+        span.textContent = docPath;
+        label.appendChild(input);
+        label.appendChild(span);
+        els.docsList.appendChild(label);
+      }
+    }
+
+    function renderNotebooksDropdown() {
+      const currentId = state.attachedNotebook ? state.attachedNotebook.notebook_id : "";
+      els.notebookSelect.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent =
+        state.notebooks.length > 0
+          ? "— Select a Gemini Notebook to attach —"
+          : "— No notebooks returned by active engine —";
+      els.notebookSelect.appendChild(placeholder);
+
+      let foundAttached = false;
+      for (const nb of state.notebooks) {
+        const opt = document.createElement("option");
+        opt.value = nb.notebookId;
+        const prefix = nb.emoji ? `${nb.emoji} ` : "📓 ";
+        const countSuffix =
+          typeof nb.sourcesCount === "number" ? ` (${nb.sourcesCount} sources)` : "";
+        opt.textContent = `${prefix}${nb.title || nb.notebookId}${countSuffix}`;
+        opt.dataset.title = nb.title || nb.notebookId;
+        if (nb.notebookId === currentId) {
+          opt.selected = true;
+          foundAttached = true;
+        }
+        els.notebookSelect.appendChild(opt);
+      }
+
+      if (currentId && !foundAttached) {
+        const attachedOpt = document.createElement("option");
+        attachedOpt.value = currentId;
+        attachedOpt.dataset.title = state.attachedNotebook.title || currentId;
+        attachedOpt.textContent = `📓 ${state.attachedNotebook.title || currentId} (attached)`;
+        attachedOpt.selected = true;
+        els.notebookSelect.appendChild(attachedOpt);
+      }
+    }
+
+    function isSourceChecked(sourceId) {
+      if (!state.activeSourceIds || state.activeSourceIds.length === 0) {
+        return true;
+      }
+      return state.activeSourceIds.includes(sourceId);
+    }
+
+    function updateSelectAllCheckboxState() {
+      const total = state.sources.length;
+      if (total === 0) {
+        els.selectAllContainer.style.display = "none";
+        return;
+      }
+      els.selectAllContainer.style.display = "block";
+
+      const allIds = state.sources.map((s) => s.sourceId);
+      const checkedCount =
+        state.activeSourceIds.length === 0
+          ? total
+          : allIds.filter((id) => state.activeSourceIds.includes(id)).length;
+
+      if (checkedCount === total || state.activeSourceIds.length === 0) {
+        els.selectAllCheckbox.checked = true;
+        els.selectAllCheckbox.indeterminate = false;
+        els.activeFilterHint.textContent = `All ${total} active`;
+      } else if (checkedCount === 0) {
+        els.selectAllCheckbox.checked = false;
+        els.selectAllCheckbox.indeterminate = false;
+        els.activeFilterHint.textContent = `None selected (defaults to all)`;
+      } else {
+        els.selectAllCheckbox.checked = false;
+        els.selectAllCheckbox.indeterminate = true;
+        els.activeFilterHint.textContent = `${checkedCount} / ${total} active`;
+      }
+    }
+
+    function renderSourcesList(notebookPayload) {
+      const sources = Array.isArray(notebookPayload.sources) ? notebookPayload.sources : [];
+      state.sources = sources;
+      if (Array.isArray(notebookPayload.active_source_ids)) {
+        state.activeSourceIds = [...notebookPayload.active_source_ids];
+      }
+
+      els.sourcesCountBadge.textContent = `${sources.length} source${sources.length === 1 ? "" : "s"}`;
+      els.sourcesList.innerHTML = "";
+
+      const summary = notebookPayload.notebook && notebookPayload.notebook.summary;
+      if (summary) {
+        els.summaryDetails.style.display = "block";
+        els.summaryText.textContent = summary;
+      } else {
+        els.summaryDetails.style.display = "none";
+        els.summaryText.textContent = "";
+      }
+
+      if (sources.length === 0) {
+        els.selectAllContainer.style.display = "none";
+        const empty = document.createElement("div");
+        empty.className = "muted-note";
+        empty.textContent = state.attachedNotebook
+          ? "This notebook has no sources yet. Click 'Sync Workspace Docs' below to upload files."
+          : "Attach a notebook to inspect and filter its grounding sources.";
+        els.sourcesList.appendChild(empty);
+        return;
+      }
+
+      updateSelectAllCheckboxState();
+
+      for (const src of sources) {
+        const label = document.createElement("label");
+        label.className = "checkbox-label";
+
+        const left = document.createElement("span");
+        left.className = "checkbox-left";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "checkbox-custom";
+        checkbox.value = src.sourceId;
+        checkbox.checked = isSourceChecked(src.sourceId);
+        checkbox.addEventListener("change", () =>
+          handleSourceCheckboxToggle(src.sourceId, checkbox.checked)
+        );
+
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "source-title";
+        titleSpan.title = src.title || src.sourceId;
+        titleSpan.textContent = src.title || src.sourceId;
+
+        left.appendChild(checkbox);
+        left.appendChild(titleSpan);
+
+        const metaSpan = document.createElement("span");
+        metaSpan.className = "source-meta";
+        const parts = [];
+        if (src.kind && src.kind !== "unknown") parts.push(src.kind);
+        if (typeof src.wordCount === "number") parts.push(`${src.wordCount}w`);
+        metaSpan.textContent = parts.join(" • ") || src.status || "ready";
+
+        label.appendChild(left);
+        label.appendChild(metaSpan);
+        els.sourcesList.appendChild(label);
+      }
+    }
+
+    async function loadActiveNotebookSources(notebookId) {
+      if (!notebookId) {
+        renderSourcesList({ sources: [], active_source_ids: [] });
+        return;
+      }
+      try {
+        const data = await fetchJson(
+          `/api/notebook?id=${encodeURIComponent(notebookId)}&engine=${encodeURIComponent(state.engine)}`
+        );
+        renderSourcesList(data);
+      } catch (err) {
+        els.sourcesList.innerHTML = "";
+        const errDiv = document.createElement("div");
+        errDiv.className = "muted-note";
+        errDiv.textContent = `Unable to fetch sources: ${err.message}`;
+        els.sourcesList.appendChild(errDiv);
+      }
+    }
+
+    async function refreshAll() {
+      els.refreshBtn.disabled = true;
+      try {
+        const statusData = await fetchJson(`/api/status?engine=${encodeURIComponent(state.engine)}`);
+        renderEngineStatus(statusData);
+        renderWorkspaceBinding(statusData.attached_notebook);
+        renderWorkspaceDocs(statusData.workspace_docs);
+
+        try {
+          const listData = await fetchJson(
+            `/api/notebooks?engine=${encodeURIComponent(state.engine)}`
+          );
+          state.notebooks = listData.notebooks || [];
+        } catch (_listErr) {
+          state.notebooks = [];
+        }
+        renderNotebooksDropdown();
+
+        const activeId = state.attachedNotebook && state.attachedNotebook.notebook_id;
+        await loadActiveNotebookSources(activeId);
+      } catch (err) {
+        showToast(`Status check failed: ${err.message}`, "err");
+      } finally {
+        els.refreshBtn.disabled = false;
+      }
+    }
+
+    async function handleNotebookSwitch(notebookId, title) {
+      if (!notebookId) return;
+      try {
+        const res = await fetchJson("/api/attach", {
+          method: "POST",
+          body: JSON.stringify({
+            notebook_id: notebookId,
+            title: title || notebookId,
+            active_source_ids: [],
+            engine: state.engine,
+          }),
+        });
+        renderWorkspaceBinding(res.binding);
+        showToast(`Attached notebook "${res.binding.title || notebookId}"`, "ok");
+        await loadActiveNotebookSources(notebookId);
+      } catch (err) {
+        showToast(`Attach failed: ${err.message}`, "err");
+      }
+    }
+
+    async function handleSourceCheckboxToggle(sourceId, enabled) {
+      const allIds = state.sources.map((s) => s.sourceId);
+      try {
+        const res = await fetchJson("/api/sources/toggle", {
+          method: "POST",
+          body: JSON.stringify({
+            source_id: sourceId,
+            enabled: enabled,
+            all_source_ids: allIds,
+          }),
+        });
+        renderWorkspaceBinding(res.binding);
+        renderSourcesList({
+          notebook: state.attachedNotebook,
+          sources: state.sources,
+          active_source_ids: res.active_source_ids,
+        });
+        showToast("Updated active_source_ids in .agents/notebook.json", "ok");
+      } catch (err) {
+        showToast(`Source filter update failed: ${err.message}`, "err");
+      }
+    }
+
+    async function handleSelectAllSourcesChange() {
+      try {
+        const res = await fetchJson("/api/sources/toggle", {
+          method: "POST",
+          body: JSON.stringify({
+            active_source_ids: [],
+          }),
+        });
+        renderWorkspaceBinding(res.binding);
+        renderSourcesList({
+          notebook: state.attachedNotebook,
+          sources: state.sources,
+          active_source_ids: [],
+        });
+        showToast("All notebook sources enabled for grounding", "ok");
+      } catch (err) {
+        showToast(`Failed to reset source filter: ${err.message}`, "err");
+      }
+    }
+
+    async function handleCreateNotebook() {
+      const title = (els.createInput.value || "").trim();
+      if (!title) {
+        showToast("Enter a title for the new notebook first.", "err");
+        return;
+      }
+      els.createBtn.disabled = true;
+      try {
+        const res = await fetchJson("/api/create", {
+          method: "POST",
+          body: JSON.stringify({
+            title: title,
+            attach_to_workspace: true,
+            engine: state.engine,
+          }),
+        });
+        els.createInput.value = "";
+        showToast(`Created & attached "${res.notebook.title}"`, "ok");
+        await refreshAll();
+      } catch (err) {
+        showToast(`Create notebook failed: ${err.message}`, "err");
+      } finally {
+        els.createBtn.disabled = false;
+      }
+    }
+
+    async function handleSyncWorkspaceDocs() {
+      if (!state.attachedNotebook || !state.attachedNotebook.notebook_id) {
+        showToast("Attach a notebook first before syncing workspace docs.", "err");
+        return;
+      }
+      const checkedInputs = Array.from(
+        els.docsList.querySelectorAll('input[type="checkbox"]:checked')
+      );
+      const selectedPaths = checkedInputs.map((el) => el.value);
+
+      els.syncDocsBtn.disabled = true;
+      els.syncDocsBtn.textContent = "⏳ Syncing Workspace Docs…";
+      try {
+        const res = await fetchJson("/api/sync", {
+          method: "POST",
+          body: JSON.stringify({
+            file_paths: selectedPaths,
+            notebook_id: state.attachedNotebook.notebook_id,
+            engine: state.engine,
+          }),
+        });
+        const count = Array.isArray(res.uploaded) ? res.uploaded.length : 0;
+        showToast(`Synced ${count} workspace file(s) to notebook`, "ok");
+        await loadActiveNotebookSources(state.attachedNotebook.notebook_id);
+      } catch (err) {
+        showToast(`Sync failed: ${err.message}`, "err");
+      } finally {
+        els.syncDocsBtn.disabled = false;
+        els.syncDocsBtn.textContent = "⬆ Sync Workspace Docs";
+      }
+    }
+
+    els.refreshBtn.addEventListener("click", refreshAll);
+    els.engineSelect.addEventListener("change", () => {
+      state.engine = els.engineSelect.value;
+      refreshAll();
+    });
+    els.notebookSelect.addEventListener("change", () => {
+      const selectedOpt = els.notebookSelect.options[els.notebookSelect.selectedIndex];
+      const notebookId = els.notebookSelect.value;
+      const title = selectedOpt ? selectedOpt.dataset.title || selectedOpt.textContent : notebookId;
+      if (notebookId) {
+        handleNotebookSwitch(notebookId, title);
+      }
+    });
+    els.selectAllCheckbox.addEventListener("change", handleSelectAllSourcesChange);
+    els.createBtn.addEventListener("click", handleCreateNotebook);
+    els.createInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleCreateNotebook();
+      }
+    });
+    els.syncDocsBtn.addEventListener("click", handleSyncWorkspaceDocs);
+
+    document.addEventListener("DOMContentLoaded", refreshAll);
+  </script>
 </body>
 </html>
