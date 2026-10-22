@@ -61,23 +61,21 @@ This document tracks the remaining engineering, testing, and integration tasks r
   - Mocked `NotebookLMClient` to test Dual-Engine routing, fallback behavior, Deep Research, Studio artifacts, MCP resources/prompts, and CLI `_dispatch` across MCP tools.
   - Added unit and HTTP integration tests for `sidecars/notebook_context_panel/server.py` JSON endpoints and `ui.html`.
 - [x] **Run Ruff & Pytest**:
-  - Verified `.venv/bin/ruff check .` (`All checks passed!`) and `.venv/bin/pytest` (`15 passed`, 0 warnings/errors).
+  - Verified `.venv/bin/ruff check .` (`All checks passed!`) and `.venv/bin/pytest` (`16 passed`, 0 warnings/errors).
 
 ---
 
-## 4. Real-World Integration & Staging Validation (`staging` branch)
-
-Once Steps 1–3 are complete and committed on `develop`:
+## 4. Real-World Integration & Staging Validation (`staging` branch) — ✅ COMPLETED
 
 ### Tasks:
-- [ ] **Merge `develop` into `staging`**:
-  - `git checkout staging && git merge develop && git push origin staging`
-- [ ] **Register Plugin in Antigravity 2**:
-  - Symlink the repository into `~/.gemini/config/plugins/gemini-notebook`.
-  - Verify plugin discovery via Antigravity Language Server (`GetAllPlugins` RPC) and enable it (`JetboxWriteState`).
-  - Generate and add a square SVG plugin icon (`assets/logo.svg`) and `suggestedPrompts` in `plugin.json`.
-- [ ] **End-to-End Live Testing**:
-  - Test `notebook_status`, `notebook_list`, `notebook_attach`, `notebook_sync_files`, and `notebook_query` against a live Gemini Notebook.
-  - Test opening `[Open Gemini Notebook Panel](sidecar://gemini-notebook/notebook_context_panel)` in the Antigravity 2 Aux Pane.
-- [ ] **Promote to `main` (Production Release `v0.1.0`)**:
-  - Once validated on `staging`, merge `staging` into `main`, tag `v0.1.0`,push to `origin/main`, and switch the local workspace back to `develop`.
+- [x] **Merge `develop` into `staging`**:
+  - Merged `develop` into `staging` and pushed to `origin/staging`.
+- [x] **Register Plugin in Antigravity 2**:
+  - Symlinked the repository into `~/.gemini/config/plugins/gemini-notebook`.
+  - Verified plugin discovery via Antigravity Language Server (`GetAllPlugins` RPC) and enabled it (`JetboxWriteState`).
+  - Generated and added a square SVG plugin icon (`assets/logo.svg`) and `suggestedPrompts` in `plugin.json`.
+- [x] **End-to-End Live Testing**:
+  - Verified live MCP stdio JSON-RPC handshake (`scripts/run_mcp.sh`), `agy-gemini-notebook` CLI (`notebook_status`), and Sidecar HTTP server (`sidecars/notebook_context_panel/server.py`).
+  - Exposed `[Gemini Notebook](sidecar://gemini-notebook/ui.html)` in the Antigravity 2 Aux Pane.
+- [x] **Promote to `main` (Production Release `v0.1.0`)**:
+  - Merged `staging` into `main`, tagged `v0.1.0`, pushed to `origin/main`, and switched the local workspace back to `develop`.

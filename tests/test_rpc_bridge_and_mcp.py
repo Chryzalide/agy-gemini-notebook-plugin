@@ -673,3 +673,33 @@ async def test_mcp_resources_prompts_and_cli_dispatch(
     assert "notebook_research" in p2
     assert "Sidecar Research" in p2
 
+
+@pytest.mark.asyncio
+async def test_mcp_stdio_server_handshake() -> None:
+    """Verify the portable `scripts/run_mcp.sh` launcher over live MCP stdio JSON-RPC."""
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    repo_root = Path(__file__).resolve().parent.parent
+    params = StdioServerParameters(
+        command="bash",
+        args=[str(repo_root / "scripts" / "run_mcp.sh")],
+    )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        init = await session.initialize()
+        assert init.server_info.name == "gemini_notebook_mcp"
+
+        tools = await session.list_tools()
+        assert len(tools.tools) == 20
+
+        prompts = await session.list_prompts()
+        assert len(prompts.prompts) == 2
+
+        resources = await session.list_resources()
+        assert len(resources.resources) == 2
+
+        status_res = await session.call_tool("notebook_status", {})
+        assert not status_res.is_error
+
+
+
