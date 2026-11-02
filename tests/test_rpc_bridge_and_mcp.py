@@ -607,11 +607,29 @@ def test_cli_parser_commands() -> None:
     parser = build_parser()
 
     args_res = parser.parse_args(
-        ["research", "Model Context Protocol", "--mode", "deep", "--new-notebook", "MCP Deep Dive"]
+        [
+            "research",
+            "Model Context Protocol",
+            "--mode",
+            "deep",
+            "--wait",
+            "--new-notebook",
+            "MCP Deep Dive",
+        ]
     )
     assert args_res.command == "research"
     assert args_res.mode == "deep"
+    assert args_res.wait is True
+    assert args_res.no_wait is False
     assert args_res.new_notebook == "MCP Deep Dive"
+
+    args_rstat = parser.parse_args(
+        ["research-status", "--report-id", "rep-123", "--wait", "--import-sources"]
+    )
+    assert args_rstat.command == "research-status"
+    assert args_rstat.report_id == "rep-123"
+    assert args_rstat.wait is True
+    assert args_rstat.import_sources is True
 
     args_inv = parser.parse_args(
         ["invoke", "--target", "arch", "--question", "Explain the auth flow"]
@@ -808,3 +826,93 @@ async def test_mcp_stdio_server_handshake() -> None:
 
         status_res = await session.call_tool("notebook_status", {})
         assert not status_res.is_error
+
+
+@pytest.mark.asyncio
+async def test_deep_research_polls_with_report_id_not_session_task_id(
+    tmp_path: Path,
+    mock_rpc_client: MagicMock,
+) -> None:
+    """Regression test: Deep Research must poll/wait/import using `report_id`, not `start().task_id`."""
+    from agy_gemini_notebook.cli import _dispatch
+
+    await notebook_attach(
+        notebook_id="nb-rpc-1",
+        title="Architecture Brain",
+        workspace_dir=str(tmp_path),
+    )
+
+    mock_rpc_client.research.start = AsyncMock(
+        side_effect=lambda nid, query, source="web", mode="fast": FakeResearchStart(
+            task_id="session-unpollable-999" if mode == "deep" else "task-fast-111",
+            report_id="report-pollable-777" if mode == "deep" else None,
+            notebook_id=nid,
+            query=query,
+            mode=mode,
+        )
+    )
+
+    async def _strict_wait(nid: str, tid: str | None = None, **kwargs: Any) -> FakeResearchTask:
+        if tid == "session-unpollable-999":
+            raise TimeoutError("Timed out polling session_id instead of report_id")
+        return FakeResearchTask(
+            task_id=tid or "report-pollable-777",
+            status="completed",
+            query="deep research topic",
+            summary="Deep summary",
+            report="# Synthesized Report",
+            sources=(
+                FakeResearchSource(
+                    url="https://example.com/deep",
+                    title="Deep Source",
+                    research_task_id=tid or "report-pollable-777",
+                ),
+            ),
+        )
+
+    mock_rpc_client.research.wait_for_completion = AsyncMock(side_effect=_strict_wait)
+
+    # 1. Deep Research with wait=True (and CLI `--wait`) must pass `report_id` to wait_for_completion
+    parser = build_parser()
+    args_deep_wait = parser.parse_args(
+        ["-w", str(tmp_path), "research", "deep research topic", "--mode", "deep", "--wait"]
+    )
+    res_deep_wait = await _dispatch(args_deep_wait)
+    assert res_deep_wait["status"] == "completed"
+    assert res_deep_wait["task_id"] == "report-pollable-777"
+    assert res_deep_wait["poll_task_id"] == "report-pollable-777"
+    assert res_deep_wait["report_id"] == "report-pollable-777"
+    assert res_deep_wait["start_task_id"] == "session-unpollable-999"
+    mock_rpc_client.research.wait_for_completion.assert_awaited_with(
+        "nb-rpc-1",
+        "report-pollable-777",
+        timeout=600.0,
+    )
+
+    # 2. Deep Research with --no-wait must expose the pollable `report_id` as `task_id` / `poll_task_id`
+    args_deep_nowait = parser.parse_args(
+        ["-w", str(tmp_path), "research", "deep research topic", "--mode", "deep", "--no-wait"]
+    )
+    res_deep_nowait = await _dispatch(args_deep_nowait)
+    assert res_deep_nowait["status"] == "in_progress"
+    assert res_deep_nowait["task_id"] == "report-pollable-777"
+    assert res_deep_nowait["poll_task_id"] == "report-pollable-777"
+    assert res_deep_nowait["report_id"] == "report-pollable-777"
+    assert res_deep_nowait["start_task_id"] == "session-unpollable-999"
+
+    # 3. `research-status --report-id` and `--poll-task-id` forward the ID properly
+    args_rstat = parser.parse_args(
+        [
+            "-w",
+            str(tmp_path),
+            "research-status",
+            "--report-id",
+            "report-pollable-777",
+            "--wait",
+            "--import-sources",
+        ]
+    )
+    res_rstat = await _dispatch(args_rstat)
+    assert res_rstat["task_id"] == "report-pollable-777"
+    assert res_rstat["imported_count"] == 1
+

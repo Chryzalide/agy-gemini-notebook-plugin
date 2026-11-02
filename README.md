@@ -1,6 +1,6 @@
 # 📓 Gemini Notebook by Chryzalide (`agy-gemini-notebook-plugin`)
 
-![Version](https://img.shields.io/badge/version-v1.0.5-blue)
+![Version](https://img.shields.io/badge/version-v1.0.6-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Author](https://img.shields.io/badge/author-Souryan%20Aug%C3%A9-purple)](https://souryan-auge.fr/)
@@ -311,6 +311,15 @@ agy-gemini-notebook sync README.md docs/architecture.md
 ## 📦 Versioning & Changelog
 
 This project follows strict, transparent versioning. **Every version update and change made to the repository must be documented, explained, and recorded in this section of `README.md`** (and kept synchronized across `pyproject.toml`, `plugin.json`, and `src/agy_gemini_notebook/__init__.py`).
+
+### `v1.0.6` (2026-11-02) — Deep Research `report_id` Polling Fix & CLI `--wait` / `--report-id` Support
+
+- **Fix Deep Research Polling, Waiting & Source Import Identifier (`src/agy_gemini_notebook/engines/rpc_bridge.py`)**:
+  - **Why**: In NotebookLM's `START_DEEP_RESEARCH` RPC response (`client.research.start(..., mode="deep")`), slot 0 (`started.task_id`) is a transient session ID (`sessionId`) that is never matched by `POLL_RESEARCH`, `wait_for_completion`, `IMPORT_RESEARCH`, or `CANCEL_RESEARCH`, whereas slot 1 (`started.report_id`) is the actual pollable and importable task identifier. Previously, `NotebookRpcBridge.run_research()` passed `started.task_id` instead of `started.report_id` to `client.research.wait_for_completion()`, causing `research --mode deep` (with `wait=True`) to poll an unmatchable ID (`NOT_FOUND`) until the wait timeout always expired—even when the Deep Research run had completed in ~10 minutes. Similarly, `research --no-wait` returned the non-pollable `started.task_id` in `task_id`, requiring users to manually pass `--task-id <report_id>` to `research-status`.
+  - **How**: Updated `NotebookRpcBridge.run_research()` to select `poll_task_id = report_id if (mode_norm == "deep" and report_id) else start_task_id` and pass `poll_task_id` to `client.research.wait_for_completion()` and `_import_task_sources()`. When `wait=False` (`--no-wait`), `task_id` and `poll_task_id` now both expose the pollable identifier (`report_id` for Deep Research, `start_task_id` for Fast Research) alongside `report_id` and `start_task_id`.
+- **Explicit `--wait` on `research` and `--report-id` / `--poll-task-id` on `research-status` (`src/agy_gemini_notebook/cli.py`, `src/agy_gemini_notebook/mcp_server.py`, `tests/test_rpc_bridge_and_mcp.py`)**:
+  - **Why**: Agent harnesses and CLI users frequently pass `--wait` explicitly to `agy-gemini-notebook research` (consistent with `sync --wait`, `add-source --wait`, `research-status --wait`, `audio --wait`, and `generate --wait`) or pass `--report-id` / `--poll-task-id` to `research-status` / `notebook_research_status`.
+  - **How**: Added `--wait` to the `research` CLI subparser, added `--report-id` and `--poll-task-id` options to `research-status` and `notebook_research_status`, and added regression tests in `tests/test_rpc_bridge_and_mcp.py` verifying that Deep Research fails if polled with `start_task_id` and succeeds using `report_id`.
 
 ### `v1.0.5` (2026-10-22) — Visual Demonstration Suite (Animated Walkthrough GIF, Sidecar UI & CLI Deep Research Previews)
 

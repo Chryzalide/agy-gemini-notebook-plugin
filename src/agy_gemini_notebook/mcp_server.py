@@ -787,6 +787,8 @@ async def notebook_research(
 @mcp.tool()
 async def notebook_research_status(
     task_id: str | None = None,
+    report_id: str | None = None,
+    poll_task_id: str | None = None,
     wait: bool = False,
     import_sources: bool = False,
     cited_only: bool = False,
@@ -798,16 +800,17 @@ async def notebook_research_status(
 ) -> dict[str, Any]:
     """Check status, wait for completion, import sources from, or cancel a Fast/Deep Research run."""
     target_id = _resolve_notebook_id(notebook_id, workspace_dir=workspace_dir)
+    effective_task_id = poll_task_id or report_id or task_id
     bridge = NotebookRpcBridge()
     try:
         if cancel:
-            if not task_id:
-                raise ValueError("`task_id` is required when `cancel=True`.")
-            return await bridge.cancel_research(notebook_id=target_id, task_id=task_id)
+            if not effective_task_id:
+                raise ValueError("`task_id` (or `report_id` / `poll_task_id`) is required when `cancel=True`.")
+            return await bridge.cancel_research(notebook_id=target_id, task_id=effective_task_id)
 
         return await bridge.poll_research(
             notebook_id=target_id,
-            task_id=task_id,
+            task_id=effective_task_id,
             wait=wait,
             timeout=timeout,
             import_sources=import_sources,

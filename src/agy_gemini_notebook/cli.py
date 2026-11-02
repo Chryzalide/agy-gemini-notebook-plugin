@@ -184,8 +184,15 @@ async def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
             workspace_dir=args.workspace,
         )
     if cmd == "research-status":
+        effective_task_id = (
+            getattr(args, "poll_task_id", None)
+            or getattr(args, "report_id", None)
+            or args.task_id
+        )
         return await notebook_research_status(
-            task_id=args.task_id,
+            task_id=effective_task_id,
+            report_id=getattr(args, "report_id", None),
+            poll_task_id=getattr(args, "poll_task_id", None),
             wait=args.wait,
             import_sources=args.import_sources,
             cited_only=args.cited_only,
@@ -436,6 +443,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Create a new notebook with this title before running research.",
     )
+    p_res.add_argument(
+        "--wait",
+        action="store_true",
+        default=False,
+        help="Wait for research completion before returning (default unless --no-wait is set).",
+    )
     p_res.add_argument("--no-wait", action="store_true", help="Start research without blocking.")
     p_res.add_argument(
         "--no-import",
@@ -452,7 +465,17 @@ def build_parser() -> argparse.ArgumentParser:
     # research-status
     p_rstat = sub.add_parser("research-status", help="Poll, wait on, import, or cancel a research run.")
     p_rstat.add_argument("-n", "--notebook-id", default=None, help="Notebook ID or alias.")
-    p_rstat.add_argument("--task-id", default=None, help="Research task/run ID.")
+    p_rstat.add_argument("--task-id", default=None, help="Research task/report ID.")
+    p_rstat.add_argument(
+        "--report-id",
+        default=None,
+        help="Alias for --task-id (Deep Research report ID).",
+    )
+    p_rstat.add_argument(
+        "--poll-task-id",
+        default=None,
+        help="Alias for --task-id (pollable task ID).",
+    )
     p_rstat.add_argument("--wait", action="store_true", help="Wait until completion.")
     p_rstat.add_argument(
         "--import-sources",

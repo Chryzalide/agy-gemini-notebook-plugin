@@ -109,8 +109,10 @@ def _serialize_research_task(task: Any) -> dict[str, Any]:
     status_val = getattr(task, "status", None)
     status_str = getattr(status_val, "name", str(status_val)).lower() if status_val else "completed"
     raw_sources = getattr(task, "sources", ()) or ()
+    task_id = getattr(task, "task_id", "")
     return {
-        "task_id": getattr(task, "task_id", ""),
+        "task_id": task_id,
+        "poll_task_id": task_id,
         "status": status_str,
         "query": getattr(task, "query", ""),
         "summary": getattr(task, "summary", "") or "",
@@ -762,6 +764,7 @@ class NotebookRpcBridge:
         task: Any,
         cited_only: bool = False,
         allow_duplicate: bool = False,
+        fallback_task_id: str = "",
     ) -> list[dict[str, Any]]:
         """Import discovered sources from a completed ResearchTask into the notebook."""
         raw_sources = list(getattr(task, "sources", ()) or ())
@@ -774,7 +777,7 @@ class NotebookRpcBridge:
             selection = client.research.select_cited_sources(raw_sources, report_text)
             selected = list(getattr(selection, "sources", raw_sources))
 
-        task_id = getattr(task, "task_id", "")
+        task_id = getattr(task, "task_id", "") or fallback_task_id
         if hasattr(client.research, "import_sources_with_verification"):
             return await client.research.import_sources_with_verification(
                 notebook_id,
@@ -851,13 +854,22 @@ class NotebookRpcBridge:
                 source=source_norm,
                 mode=mode_norm,
             )
-            task_id = getattr(started, "task_id", "")
+            start_task_id = getattr(started, "task_id", "") or ""
+            report_id = getattr(started, "report_id", None)
+            # In NotebookLM's START_DEEP_RESEARCH RPC, slot 0 (`task_id`) is a
+            # non-pollable sessionId whereas slot 1 (`report_id`) is the actual
+            # poll/import/cancel task ID surfaced by POLL_RESEARCH.
+            poll_task_id = (
+                report_id if (mode_norm == "deep" and report_id) else start_task_id
+            )
             if not wait:
                 return {
                     "status": "in_progress",
                     "notebook_id": notebook_id,
-                    "task_id": task_id,
-                    "report_id": getattr(started, "report_id", None),
+                    "task_id": poll_task_id,
+                    "poll_task_id": poll_task_id,
+                    "start_task_id": start_task_id,
+                    "report_id": report_id,
                     "query": query,
                     "mode": mode_norm,
                     "source": source_norm,
@@ -866,10 +878,16 @@ class NotebookRpcBridge:
 
             task = await client.research.wait_for_completion(
                 notebook_id,
-                task_id,
+                poll_task_id,
                 timeout=timeout,
             )
             serialized = _serialize_research_task(task)
+            if report_id is not None:
+                serialized["report_id"] = report_id
+            if start_task_id:
+                serialized["start_task_id"] = start_task_id
+            if poll_task_id:
+                serialized["poll_task_id"] = poll_task_id
             imported = []
             if import_sources and getattr(task, "sources", None):
                 imported = await self._import_task_sources(
@@ -878,6 +896,7 @@ class NotebookRpcBridge:
                     task,
                     cited_only=cited_only,
                     allow_duplicate=allow_duplicate,
+                    fallback_task_id=poll_task_id,
                 )
             return {
                 **serialized,
@@ -919,6 +938,7 @@ class NotebookRpcBridge:
                     task,
                     cited_only=cited_only,
                     allow_duplicate=allow_duplicate,
+                    fallback_task_id=task_id or "",
                 )
             return {
                 **serialized,
