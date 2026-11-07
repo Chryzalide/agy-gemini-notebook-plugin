@@ -24,8 +24,10 @@ except ImportError:
 from agy_gemini_notebook.config import (
     WorkspaceNotebookBinding,
     describe_environment,
+    extract_and_validate_resource_id,
     load_workspace_binding,
     save_workspace_binding,
+    validate_workspace_file_path,
 )
 from agy_gemini_notebook.engines.gcp_enterprise_rest import GcpNotebookEnterpriseClient
 from agy_gemini_notebook.engines.rpc_bridge import (
@@ -68,11 +70,8 @@ def _auth_error_response(exc: Exception, engine: str = "rpc_bridge") -> dict[str
 
 
 def _extract_notebook_id(raw_id: str) -> str:
-    """Extract the bare notebook ID if a full resource name `projects/.../notebooks/{id}` is given."""
-    cleaned = raw_id.strip()
-    if "/notebooks/" in cleaned:
-        return cleaned.split("/notebooks/")[-1].split("/")[0]
-    return cleaned
+    """Extract the bare notebook ID if a full resource name `projects/.../notebooks/{id}` is given and validate it."""
+    return extract_and_validate_resource_id(raw_id, "notebook_id")
 
 
 def _resolve_notebook_id(
@@ -506,13 +505,19 @@ async def notebook_sync_files(
     results: list[dict[str, Any]] = []
     try:
         for fpath in file_paths:
+            validated_path = validate_workspace_file_path(fpath, workspace_dir=workspace_dir)
             if selected_engine == "gcp_enterprise_rest":
-                res = await client.upload_file_source(notebook_id=target_id, file_path=fpath)
+                res = await client.upload_file_source(
+                    notebook_id=target_id,
+                    file_path=validated_path,
+                    workspace_dir=workspace_dir,
+                )
             else:
                 res = await bridge.upload_file_source(
                     notebook_id=target_id,
-                    file_path=fpath,
+                    file_path=validated_path,
                     wait=wait,
+                    workspace_dir=workspace_dir,
                 )
             results.append({"file": fpath, "result": res})
     except NotebookAuthRequiredError as exc:

@@ -11,10 +11,26 @@ from __future__ import annotations
 import mimetypes
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
-from agy_gemini_notebook.config import PluginConfig
+from agy_gemini_notebook.config import (
+    PluginConfig,
+    extract_and_validate_resource_id,
+    validate_gcp_endpoint_location,
+    validate_gcp_location,
+    validate_gcp_project_number,
+    validate_workspace_file_path,
+)
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MiB safety limit for in-memory upload
+
+
+def _safe_segment(raw_value: str, field_name: str = "resource_id") -> str:
+    """Validate a REST URL path segment and return its URL-encoded form."""
+    cleaned = extract_and_validate_resource_id(raw_value, field_name)
+    return quote(cleaned, safe="")
 
 # Supported MIME types for official `sources:uploadFile` endpoint
 EXT_MIME_OVERRIDES: dict[str, str] = {
@@ -47,10 +63,18 @@ class GcpNotebookEnterpriseClient:
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.config = config or PluginConfig()
-        self.project_number = project_number or self.config.gcp_project_number
-        self.location = location or self.config.gcp_location
-        self.endpoint_location = endpoint_location or self.config.gcp_endpoint_location
-        self.engine_id = engine_id or self.config.gcp_engine_id
+        raw_project = project_number or self.config.gcp_project_number
+        self.project_number = validate_gcp_project_number(raw_project)
+        self.location = validate_gcp_location(location or self.config.gcp_location)
+        self.endpoint_location = validate_gcp_endpoint_location(
+            endpoint_location or self.config.gcp_endpoint_location
+        )
+        raw_engine = engine_id or self.config.gcp_engine_id
+        self.engine_id = (
+            extract_and_validate_resource_id(raw_engine, "gcp_engine_id")
+            if raw_engine and raw_engine.strip()
+            else None
+        )
         self._transport = transport
 
     def _client(self, timeout: float = 30.0) -> httpx.AsyncClient:
@@ -62,22 +86,26 @@ class GcpNotebookEnterpriseClient:
                 "GCP_PROJECT_NUMBER is required for the official Google Cloud Notebooks API. "
                 "Set the GCP_PROJECT_NUMBER environment variable or configure it in .agents/notebook.json."
             )
-        return self.project_number
+        return _safe_segment(self.project_number, "gcp_project_number")
 
     @property
     def base_url(self) -> str:
         project = self._require_project()
+        loc = quote(validate_gcp_location(self.location), safe="")
+        ep_loc = validate_gcp_endpoint_location(self.endpoint_location)
         return (
-            f"https://{self.endpoint_location}-discoveryengine.googleapis.com"
-            f"/v1alpha/projects/{project}/locations/{self.location}"
+            f"https://{ep_loc}-discoveryengine.googleapis.com"
+            f"/v1alpha/projects/{project}/locations/{loc}"
         )
 
     @property
     def upload_base_url(self) -> str:
         project = self._require_project()
+        loc = quote(validate_gcp_location(self.location), safe="")
+        ep_loc = validate_gcp_endpoint_location(self.endpoint_location)
         return (
-            f"https://{self.endpoint_location}-discoveryengine.googleapis.com"
-            f"/upload/v1alpha/projects/{project}/locations/{self.location}"
+            f"https://{ep_loc}-discoveryengine.googleapis.com"
+            f"/upload/v1alpha/projects/{project}/locations/{loc}"
         )
 
     def _headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -104,7 +132,8 @@ class GcpNotebookEnterpriseClient:
 
     async def get_notebook(self, notebook_id: str) -> dict[str, Any]:
         """Get a Gemini Notebook and its sources (`GET .../notebooks/{notebookId}`)."""
-        url = f"{self.base_url}/notebooks/{notebook_id}"
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        url = f"{self.base_url}/notebooks/{safe_nb}"
         async with self._client(timeout=30.0) as client:
             resp = await client.get(url, headers=self._headers())
             resp.raise_for_status()
@@ -126,9 +155,9 @@ class GcpNotebookEnterpriseClient:
     async def batch_delete_notebooks(self, notebook_ids: list[str]) -> dict[str, Any]:
         """Delete one or more notebooks (`POST .../notebooks:batchDelete`)."""
         project = self._require_project()
+        loc = quote(validate_gcp_location(self.location), safe="")
         names = [
-            n if n.startswith("projects/")
-            else f"projects/{project}/locations/{self.location}/notebooks/{n}"
+            f"projects/{project}/locations/{loc}/notebooks/{_safe_segment(n, 'notebook_id')}"
             for n in notebook_ids
         ]
         url = f"{self.base_url}/notebooks:batchDelete"
@@ -152,7 +181,8 @@ class GcpNotebookEnterpriseClient:
         - PROJECT_ROLE_READER
         - PROJECT_ROLE_NOT_SHARED (revokes access)
         """
-        url = f"{self.base_url}/notebooks/{notebook_id}:share"
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        url = f"{self.base_url}/notebooks/{safe_nb}:share"
         payload = {
             "accountAndRoles": [{"email": email, "role": role}],
             "notifyViaEmail": notify_via_email,
@@ -179,7 +209,8 @@ class GcpNotebookEnterpriseClient:
         - `{"videoContent": {"youtubeUrl": "https://www.youtube.com/watch?v=..."}}`
         - `{"googleDriveContent": {"documentId": "...", "mimeType": "application/vnd.google-apps.document", "sourceName": "Spec"}}`
         """
-        url = f"{self.base_url}/notebooks/{notebook_id}/sources:batchCreate"
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        url = f"{self.base_url}/notebooks/{safe_nb}/sources:batchCreate"
         async with self._client(timeout=60.0) as client:
             resp = await client.post(
                 url,
@@ -194,11 +225,16 @@ class GcpNotebookEnterpriseClient:
         notebook_id: str,
         file_path: str | Path,
         display_name: str | None = None,
+        workspace_dir: str | Path | None = None,
     ) -> dict[str, Any]:
         """Upload a local file to a notebook (`POST /upload/v1alpha/.../sources:uploadFile`)."""
-        path = Path(file_path).expanduser().resolve()
-        if not path.is_file():
-            raise FileNotFoundError(f"File not found: {path}")
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        path = validate_workspace_file_path(file_path, workspace_dir=workspace_dir)
+        file_size = path.stat().st_size
+        if file_size > MAX_UPLOAD_BYTES:
+            raise ValueError(
+                f"File {path.name!r} ({file_size} bytes) exceeds maximum upload limit ({MAX_UPLOAD_BYTES} bytes)."
+            )
 
         ext = path.suffix.lower()
         content_type = (
@@ -206,10 +242,10 @@ class GcpNotebookEnterpriseClient:
             or mimetypes.guess_type(path.name)[0]
             or "application/octet-stream"
         )
-        file_name = display_name or path.name
+        file_name = (display_name or path.name).replace("\r", "").replace("\n", "")
         raw_bytes = path.read_bytes()
 
-        url = f"{self.upload_base_url}/notebooks/{notebook_id}/sources:uploadFile"
+        url = f"{self.upload_base_url}/notebooks/{safe_nb}/sources:uploadFile"
         headers = self._headers(
             {
                 "X-Goog-Upload-File-Name": file_name,
@@ -224,7 +260,9 @@ class GcpNotebookEnterpriseClient:
 
     async def get_source(self, notebook_id: str, source_id: str) -> dict[str, Any]:
         """Get metadata and ingestion status of a source (`GET .../sources/{sourceId}`)."""
-        url = f"{self.base_url}/notebooks/{notebook_id}/sources/{source_id}"
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        safe_src = _safe_segment(source_id, "source_id")
+        url = f"{self.base_url}/notebooks/{safe_nb}/sources/{safe_src}"
         async with self._client(timeout=30.0) as client:
             resp = await client.get(url, headers=self._headers())
             resp.raise_for_status()
@@ -237,12 +275,13 @@ class GcpNotebookEnterpriseClient:
     ) -> dict[str, Any]:
         """Delete one or more sources from a notebook (`POST .../sources:batchDelete`)."""
         project = self._require_project()
+        loc = quote(validate_gcp_location(self.location), safe="")
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
         names = [
-            s if s.startswith("projects/")
-            else f"projects/{project}/locations/{self.location}/notebooks/{notebook_id}/sources/{s}"
+            f"projects/{project}/locations/{loc}/notebooks/{safe_nb}/sources/{_safe_segment(s, 'source_id')}"
             for s in source_ids
         ]
-        url = f"{self.base_url}/notebooks/{notebook_id}/sources:batchDelete"
+        url = f"{self.base_url}/notebooks/{safe_nb}/sources:batchDelete"
         async with self._client(timeout=30.0) as client:
             resp = await client.post(url, headers=self._headers(), json={"names": names})
             resp.raise_for_status()
@@ -260,14 +299,17 @@ class GcpNotebookEnterpriseClient:
         source_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Generate an Audio Overview podcast for a notebook (`POST .../audioOverviews`)."""
-        url = f"{self.base_url}/notebooks/{notebook_id}/audioOverviews"
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        url = f"{self.base_url}/notebooks/{safe_nb}/audioOverviews"
         generation_options: dict[str, Any] = {
             "languageCode": language_code,
         }
         if episode_focus:
             generation_options["episodeFocus"] = episode_focus
         if source_ids:
-            generation_options["sourceIds"] = [{"id": sid} for sid in source_ids]
+            generation_options["sourceIds"] = [
+                {"id": extract_and_validate_resource_id(sid, "source_id")} for sid in source_ids
+            ]
 
         async with self._client(timeout=60.0) as client:
             resp = await client.post(
@@ -284,7 +326,9 @@ class GcpNotebookEnterpriseClient:
         audio_overview_id: str = "default",
     ) -> dict[str, Any]:
         """Delete an Audio Overview (`DELETE .../audioOverviews/{audioOverviewId}`)."""
-        url = f"{self.base_url}/notebooks/{notebook_id}/audioOverviews/{audio_overview_id}"
+        safe_nb = _safe_segment(notebook_id, "notebook_id")
+        safe_audio = _safe_segment(audio_overview_id, "audio_overview_id")
+        url = f"{self.base_url}/notebooks/{safe_nb}/audioOverviews/{safe_audio}"
         async with self._client(timeout=30.0) as client:
             resp = await client.delete(url, headers=self._headers())
             resp.raise_for_status()
@@ -311,9 +355,11 @@ class GcpNotebookEnterpriseClient:
             raise ValueError(
                 "GCP_ENGINE_ID is required for pure REST Discovery Engine `servingConfigs:answer` queries."
             )
+        safe_engine = _safe_segment(target_engine, "engine_id")
+        safe_serving = _safe_segment(serving_config_id, "serving_config_id")
         url = (
             f"{self.base_url}/collections/default_collection"
-            f"/engines/{target_engine}/servingConfigs/{serving_config_id}:answer"
+            f"/engines/{safe_engine}/servingConfigs/{safe_serving}:answer"
         )
         payload: dict[str, Any] = {
             "query": {"text": question},

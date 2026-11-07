@@ -299,3 +299,122 @@ def test_sidecar_ui_uses_namespaced_theme_tokens_and_venv_python() -> None:
         assert Path(resolved_py).resolve() == venv_py.resolve()
 
 
+def test_sidecar_security_token_origin_containment_and_static_lockdown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test (FIND-03, FIND-04, FIND-08, FIND-10, FIND-11): enforce sidecar token, origin check, file containment, and static file block."""
+    monkeypatch.setenv("SIDECAR_QUIET", "1")
+    (tmp_path / "README.md").write_text("# Safe Doc\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
+
+    server_mod = _load_server_module()
+    httpd = server_mod.create_server(
+        "127.0.0.1",
+        0,
+        workspace_dir=str(tmp_path),
+        auth_token="test-secret-token-999",
+    )
+    port = httpd.server_address[1]
+    base_url = f"http://127.0.0.1:{port}"
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+
+    def _req(
+        path: str,
+        method: str = "GET",
+        payload: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, str], dict[str, Any]]:
+        body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        req_headers = dict(headers or {})
+        if body is not None:
+            req_headers.setdefault("Content-Type", "application/json")
+        req = Request(f"{base_url}{path}", data=body, headers=req_headers, method=method)
+        try:
+            with _DIRECT_OPENER.open(req, timeout=5) as resp:
+                return (
+                    resp.status,
+                    {k.lower(): v for k, v in resp.headers.items()},
+                    json.loads(resp.read().decode("utf-8")),
+                )
+        except HTTPError as exc:
+            return (
+                exc.code,
+                {k.lower(): v for k, v in exc.headers.items()},
+                json.loads(exc.read().decode("utf-8")),
+            )
+
+    try:
+        # 1. Missing X-Sidecar-Token on /api/* returns 401 Unauthorized
+        code, resp_headers, data = _req("/api/status")
+        assert code == 401
+        assert data["status"] == "error"
+        assert "access-control-allow-origin" not in resp_headers
+        assert resp_headers.get("x-frame-options") == "SAMEORIGIN"
+        assert "default-src 'self'" in resp_headers.get("content-security-policy", "")
+
+        # 2. Valid X-Sidecar-Token succeeds
+        code, _, data = _req(
+            "/api/status",
+            headers={"X-Sidecar-Token": "test-secret-token-999"},
+        )
+        assert code == 200
+        assert data["status"] == "ok"
+
+        # 3. Cross-origin request from external website is rejected with 403 Forbidden even with token
+        code, resp_headers, data = _req(
+            "/api/status",
+            headers={
+                "X-Sidecar-Token": "test-secret-token-999",
+                "Origin": "https://evil.example",
+            },
+        )
+        assert code == 403
+        assert "access-control-allow-origin" not in resp_headers
+
+        # 4. Arbitrary static file access (/server.py, /sidecar.json) returns 404 Not Found
+        code, _, data = _req("/server.py")
+        assert code == 404
+        code, _, data = _req("/sidecar.json")
+        assert code == 404
+
+        # 5. Invalid page_size returns 400 Bad Request instead of 500
+        code, _, data = _req(
+            "/api/notebooks?page_size=not-an-int",
+            headers={"X-Sidecar-Token": "test-secret-token-999"},
+        )
+        assert code == 400
+
+        # 6. Escaping bound workspace_dir via query or POST body returns 400 Bad Request
+        code, _, data = _req(
+            "/api/status?workspace_dir=/tmp",
+            headers={"X-Sidecar-Token": "test-secret-token-999"},
+        )
+        assert code == 400
+        assert "outside the configured server workspace" in data["error"]
+
+        # 7. Syncing outside-workspace file or .env via POST /api/sync returns 400 Bad Request
+        code, _, data = _req(
+            "/api/sync",
+            method="POST",
+            payload={"file_paths": [".env"]},
+            headers={"X-Sidecar-Token": "test-secret-token-999"},
+        )
+        assert code == 400
+        assert "not permitted" in data["error"]
+
+        code, _, data = _req(
+            "/api/sync",
+            method="POST",
+            payload={"file_paths": ["../outside.md"]},
+            headers={"X-Sidecar-Token": "test-secret-token-999"},
+        )
+        assert code == 400
+        assert "outside the active workspace" in data["error"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+

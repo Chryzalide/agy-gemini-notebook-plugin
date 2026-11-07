@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 echo "======================================================================"
-echo " 📓 Gemini Notebook by Chryzalide — Setup Workflow (v1.0.4)"
+echo " 📓 Gemini Notebook by Chryzalide — Setup Workflow (v1.0.7)"
 echo "======================================================================"
 echo ""
 
@@ -37,16 +37,19 @@ if [[ -x "${PLUGIN_DIR}/.venv/bin/python" ]]; then
     echo "  ✓ Found existing virtual environment at ${PLUGIN_DIR}/.venv"
 elif command -v uv >/dev/null 2>&1; then
     echo "  → Creating virtual environment and syncing packages with uv..."
-    (cd "${PLUGIN_DIR}" && uv sync --all-extras)
+    (cd "${PLUGIN_DIR}" && (uv sync --locked --all-extras 2>/dev/null || uv sync --all-extras))
 elif [[ -x "${HOME}/.local/bin/uv" ]]; then
     echo "  → Creating virtual environment and syncing packages with ~/.local/bin/uv..."
-    (cd "${PLUGIN_DIR}" && "${HOME}/.local/bin/uv" sync --all-extras)
+    (cd "${PLUGIN_DIR}" && ("${HOME}/.local/bin/uv" sync --locked --all-extras 2>/dev/null || "${HOME}/.local/bin/uv" sync --all-extras))
 else
     echo "  → Creating virtual environment with python3 -m venv..."
     python3 -m venv "${PLUGIN_DIR}/.venv"
     "${PLUGIN_DIR}/.venv/bin/pip" install --upgrade pip
     "${PLUGIN_DIR}/.venv/bin/pip" install -e "${PLUGIN_DIR}[rpc,dev]"
 fi
+
+mkdir -p "${PLUGIN_DIR}/.notebooklm-auth"
+chmod 700 "${PLUGIN_DIR}/.notebooklm-auth" 2>/dev/null || true
 
 VENV_PY="${PLUGIN_DIR}/.venv/bin/python"
 VENV_CLI="${PLUGIN_DIR}/.venv/bin/agy-gemini-notebook"

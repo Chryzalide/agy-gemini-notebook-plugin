@@ -19,5 +19,5 @@ if [[ -x "${HOME}/.local/bin/uv" ]]; then
     exec "${HOME}/.local/bin/uv" run --project "${PLUGIN_DIR}" agy-gemini-notebook-mcp "$@"
 fi
 
-export PYTHONPATH="${PLUGIN_DIR}/src:${PYTHONPATH:-}"
+export PYTHONPATH="${PLUGIN_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 exec python3 -m agy_gemini_notebook.mcp_server "$@"

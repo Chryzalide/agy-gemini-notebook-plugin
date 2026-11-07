@@ -588,3 +588,80 @@ async def test_mcp_tools_gcp_enterprise_rest_routing(
         workspace_dir=str(tmp_path),
     )
     assert deleted["engine"] == "gcp_enterprise_rest"
+
+
+@pytest.mark.asyncio
+async def test_security_ssrf_authority_injection_and_path_traversal_blocked(
+    tmp_path: Path,
+) -> None:
+    """Regression test (FIND-01, FIND-04, FIND-07): block GCP authority hijacking, resource ID traversal, and outside-workspace uploads."""
+    # 1. WorkspaceNotebookBinding rejects attacker-controlled gcp_endpoint_location / gcp_location / gcp_project_number
+    with pytest.raises(ValueError, match="gcp_endpoint_location"):
+        WorkspaceNotebookBinding(
+            notebook_id="nb-123",
+            gcp_endpoint_location="attacker.example.com/collect#",
+        )
+
+    with pytest.raises(ValueError, match="gcp_location"):
+        WorkspaceNotebookBinding(
+            notebook_id="nb-123",
+            gcp_location="../../evil",
+        )
+
+    with pytest.raises(ValueError, match="gcp_project_number"):
+        WorkspaceNotebookBinding(
+            notebook_id="nb-123",
+            gcp_project_number="12345/../../evil",
+        )
+
+    with pytest.raises(ValueError, match="notebook_id"):
+        WorkspaceNotebookBinding(
+            notebook_id="nb-123/../../other",
+        )
+
+    # 2. GcpNotebookEnterpriseClient rejects crafted endpoint_location and traversal resource IDs
+    with pytest.raises(ValueError, match="gcp_endpoint_location"):
+        GcpNotebookEnterpriseClient(
+            config=PluginConfig(
+                gcp_project_number="123456789",
+                gcp_endpoint_location="evil.example.com#",
+                gcp_access_token="mock-token",
+            )
+        )
+
+    client = GcpNotebookEnterpriseClient(
+        config=PluginConfig(
+            gcp_project_number="123456789",
+            gcp_location="global",
+            gcp_endpoint_location="global",
+            gcp_access_token="mock-token",
+        )
+    )
+    with pytest.raises(ValueError, match="notebook_id"):
+        await client.get_notebook("../other-project/notebooks/nb-999")
+
+    with pytest.raises(ValueError, match="source_id"):
+        await client.get_source("nb-101", "../../other-source")
+
+    # 3. upload_file_source blocks outside-workspace files and sensitive dotfiles (.env)
+    outside_file = tmp_path.parent / "outside_secret.txt"
+    outside_file.write_text("secret", encoding="utf-8")
+    try:
+        with pytest.raises(ValueError, match="outside the active workspace"):
+            await client.upload_file_source(
+                "nb-101",
+                outside_file,
+                workspace_dir=tmp_path,
+            )
+    finally:
+        outside_file.unlink(missing_ok=True)
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("SECRET_KEY=123\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not permitted"):
+        await client.upload_file_source(
+            "nb-101",
+            env_file,
+            workspace_dir=tmp_path,
+        )
+

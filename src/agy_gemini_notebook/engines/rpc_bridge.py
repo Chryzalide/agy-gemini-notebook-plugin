@@ -24,11 +24,39 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-from agy_gemini_notebook.config import PluginConfig
+from agy_gemini_notebook.config import (
+    PluginConfig,
+    extract_and_validate_resource_id,
+    validate_workspace_file_path,
+)
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 FALLBACK_AUTH_DIR = PLUGIN_ROOT / ".notebooklm-auth"
 NOTEBOOKLM_WEB_URL = "https://notebooklm.google.com/"
+ALLOWED_COOKIE_BROWSERS: frozenset[str] = frozenset(
+    {
+        "auto",
+        "chrome",
+        "brave",
+        "firefox",
+        "edge",
+        "chromium",
+        "vivaldi",
+        "arc",
+        "safari",
+    }
+)
+
+
+def _secure_storage_permissions(storage_file: Path, base_dir: Path) -> None:
+    """Enforce owner-only directory (`0o700`) and file (`0o600`) permissions on session cookie storage."""
+    for d in (base_dir, base_dir / "profiles", storage_file.parent):
+        with suppress(OSError):
+            if d.is_dir():
+                os.chmod(d, 0o700)
+    with suppress(OSError):
+        if storage_file.is_file():
+            os.chmod(storage_file, 0o600)
 
 COMPLIANCE_NOTICE = (
     "Compliance & Terms of Service Notice: "
@@ -278,15 +306,32 @@ class NotebookRpcBridge:
                 "Install it with `pip install -e '.[rpc]'`."
             )
 
-        prof = self.profile or "default"
+        prof = extract_and_validate_resource_id(self.profile or "default", "profile")
         fallback_storage = FALLBACK_AUTH_DIR / "profiles" / prof / "storage_state.json"
-        fallback_storage.parent.mkdir(parents=True, exist_ok=True)
+        fallback_storage.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _secure_storage_permissions(fallback_storage, FALLBACK_AUTH_DIR)
 
         # Resolve cookie source from `browser_cookies` or `browser` without launching Playwright
-        cookie_source = (browser_cookies or "").strip()
+        cookie_source = (browser_cookies or "").strip().lower()
         if not cookie_source:
-            cleaned_browser = (browser or "auto").strip()
+            cleaned_browser = (browser or "auto").strip().lower()
             cookie_source = cleaned_browser if cleaned_browser else "auto"
+        if cookie_source not in ALLOWED_COOKIE_BROWSERS:
+            raise ValueError(
+                f"Invalid browser_cookies source {cookie_source!r}. "
+                f"Expected one of: {sorted(ALLOWED_COOKIE_BROWSERS)}."
+            )
+
+        cleaned_account: str | None = None
+        if account is not None:
+            cleaned_account = str(account).strip()
+            if cleaned_account:
+                if cleaned_account.startswith("-") or any(
+                    c.isspace() or ord(c) < 32 for c in cleaned_account
+                ):
+                    raise ValueError(f"Invalid account parameter {account!r}.")
+            else:
+                cleaned_account = None
 
         python_exe = self._resolve_python_executable()
         cmd = [
@@ -299,8 +344,8 @@ class NotebookRpcBridge:
             "--browser-cookies",
             cookie_source,
         ]
-        if account:
-            cmd.extend(["--account", account])
+        if cleaned_account:
+            cmd.extend(["--account", cleaned_account])
         _ = (timeout, fresh)
 
         env = dict(os.environ)
@@ -328,12 +373,13 @@ class NotebookRpcBridge:
         stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
 
         if proc.returncode == 0 and fallback_storage.is_file():
+            _secure_storage_permissions(fallback_storage, FALLBACK_AUTH_DIR)
             with suppress(OSError):
-                user_home_storage = (
-                    Path.home() / ".notebooklm" / "profiles" / prof / "storage_state.json"
-                )
+                user_home_base = Path.home() / ".notebooklm"
+                user_home_storage = user_home_base / "profiles" / prof / "storage_state.json"
                 user_home_storage.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 shutil.copy2(fallback_storage, user_home_storage)
+                _secure_storage_permissions(user_home_storage, user_home_base)
 
             return {
                 "status": "authenticated",
@@ -538,11 +584,10 @@ class NotebookRpcBridge:
         display_name: str | None = None,
         wait: bool = False,
         wait_timeout: float = 120.0,
+        workspace_dir: str | Path | None = None,
     ) -> dict[str, Any]:
         """Upload a local file to a notebook via `client.sources.add_file`."""
-        path = Path(file_path).expanduser().resolve()
-        if not path.is_file():
-            raise FileNotFoundError(f"File not found: {path}")
+        path = validate_workspace_file_path(file_path, workspace_dir=workspace_dir)
 
         async with self._open_client() as client:
             kwargs: dict[str, Any] = {"wait": wait, "wait_timeout": wait_timeout}

@@ -916,3 +916,43 @@ async def test_deep_research_polls_with_report_id_not_session_task_id(
     assert res_rstat["task_id"] == "report-pollable-777"
     assert res_rstat["imported_count"] == 1
 
+
+@pytest.mark.asyncio
+async def test_security_rpc_login_option_injection_and_file_containment(
+    tmp_path: Path,
+    mock_rpc_client: MagicMock,
+) -> None:
+    """Regression test (FIND-04, FIND-05, FIND-06): block Click option injection in login and outside-workspace file sync."""
+    bridge = NotebookRpcBridge()
+
+    # 1. Reject "--storage=/tmp/pwn.json" or unsupported browser in browser_cookies
+    with pytest.raises(ValueError, match="Invalid browser_cookies"):
+        await bridge.login(browser_cookies="--storage=/tmp/pwn.json")
+
+    # 2. Reject leading dash or control chars in account
+    with pytest.raises(ValueError, match="Invalid account"):
+        await bridge.login(browser_cookies="chrome", account="--help")
+
+    # 3. Reject invalid profile name
+    bad_profile_bridge = NotebookRpcBridge(profile="../evil")
+    with pytest.raises(ValueError, match="Invalid profile"):
+        await bad_profile_bridge.login(browser_cookies="auto")
+
+    # 4. Reject syncing files outside workspace or .env in notebook_sync_files
+    env_file = tmp_path / ".env"
+    env_file.write_text("API_TOKEN=secret\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not permitted"):
+        await notebook_sync_files(
+            file_paths=[str(env_file)],
+            notebook_id="nb-rpc-1",
+            workspace_dir=str(tmp_path),
+        )
+
+    with pytest.raises(ValueError, match="outside the active workspace"):
+        await notebook_sync_files(
+            file_paths=["../outside.md"],
+            notebook_id="nb-rpc-1",
+            workspace_dir=str(tmp_path),
+        )
+
+

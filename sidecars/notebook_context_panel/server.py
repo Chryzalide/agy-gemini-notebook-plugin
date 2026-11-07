@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
+import secrets
 import sys
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -30,8 +32,9 @@ from agy_gemini_notebook.config import (
     WorkspaceNotebookBinding,
     describe_environment,
     load_workspace_binding,
-     resolve_workspace_dir,
+    resolve_workspace_dir,
     save_workspace_binding,
+    validate_workspace_file_path,
 )
 from agy_gemini_notebook.engines.rpc_bridge import (
     COMPLIANCE_NOTICE,
@@ -258,12 +261,42 @@ async def api_get_notebook(
         }
 
 
+def _resolve_sidecar_token() -> str | None:
+    """Return the active sidecar authentication token from environment variables, if set."""
+    for env_key in (
+        "ANTIGRAVITY_SIDECAR_UI_TOKEN",
+        "ANTIGRAVITY_SIDECAR_AUTH_TOKEN",
+        "ANTIGRAVITY_SIDECAR_WEB_TOKEN",
+    ):
+        raw = os.environ.get(env_key, "").strip()
+        if raw:
+            return raw
+    return None
+
+
+def _resolve_allowed_workspace(
+    requested_ws: str | None,
+    bound_ws: str | None,
+) -> str | None:
+    """Ensure requested `workspace_dir` cannot escape a bound server workspace directory."""
+    if not requested_ws:
+        return bound_ws
+    resolved_req = resolve_workspace_dir(requested_ws)
+    if bound_ws:
+        resolved_bound = resolve_workspace_dir(bound_ws)
+        if not resolved_req.is_relative_to(resolved_bound):
+            raise ValueError(
+                "Requested workspace_dir is outside the configured server workspace directory."
+            )
+    return str(resolved_req)
+
+
 async def api_attach_notebook(
     payload: dict[str, Any],
     workspace_dir: str | None = None,
 ) -> dict[str, Any]:
     """Handle `POST /api/attach`."""
-    ws = payload.get("workspace_dir") or workspace_dir
+    ws = _resolve_allowed_workspace(payload.get("workspace_dir"), workspace_dir)
     notebook_id = str(payload.get("notebook_id") or "").strip()
     if not notebook_id:
         raise ValueError("`notebook_id` is required to attach a notebook.")
@@ -300,7 +333,7 @@ async def api_toggle_sources(
     - Explicit list replacement: `{"active_source_ids": ["s1", "s2"]}`
     - Single source check/uncheck: `{"source_id": "s1", "enabled": false, "all_source_ids": ["s1", "s2"]}`
     """
-    ws = payload.get("workspace_dir") or workspace_dir
+    ws = _resolve_allowed_workspace(payload.get("workspace_dir"), workspace_dir)
     binding = load_workspace_binding(ws)
     notebook_id = str(payload.get("notebook_id") or (binding.notebook_id if binding else "")).strip()
     if not notebook_id:
@@ -369,7 +402,7 @@ async def api_sync_workspace_docs(
     workspace_dir: str | None = None,
 ) -> dict[str, Any]:
     """Handle `POST /api/sync` to upload workspace documentation files to the active notebook."""
-    ws = payload.get("workspace_dir") or workspace_dir
+    ws = _resolve_allowed_workspace(payload.get("workspace_dir"), workspace_dir)
     root = resolve_workspace_dir(ws)
     raw_files = payload.get("file_paths")
     if isinstance(raw_files, list) and raw_files:
@@ -382,14 +415,8 @@ async def api_sync_workspace_docs(
 
     resolved_paths: list[str] = []
     for fpath in rel_or_abs:
-        candidate = Path(fpath)
-        if not candidate.is_absolute():
-            candidate = (root / candidate).resolve()
-        if candidate.is_file():
-            resolved_paths.append(str(candidate))
-
-    if not resolved_paths:
-        raise FileNotFoundError(f"None of the requested files exist in {root}: {rel_or_abs}")
+        validated = validate_workspace_file_path(fpath, workspace_dir=root)
+        resolved_paths.append(str(validated))
 
     res = await notebook_sync_files(
         file_paths=resolved_paths,
@@ -409,7 +436,7 @@ async def api_create_notebook(
     workspace_dir: str | None = None,
 ) -> dict[str, Any]:
     """Handle `POST /api/create` to create and attach a new notebook from the Sidecar UI."""
-    ws = payload.get("workspace_dir") or workspace_dir
+    ws = _resolve_allowed_workspace(payload.get("workspace_dir"), workspace_dir)
     title = str(payload.get("title") or "").strip()
     if not title:
         raise ValueError("`title` is required to create a notebook.")
@@ -491,6 +518,9 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
     """Serves `ui.html`, static assets, and `/api/*` JSON endpoints for the Aux Pane sidecar."""
 
     workspace_dir: str | None = None
+    auth_token: str | None = None
+    timeout: int = 30
+    MAX_BODY_BYTES: int = 1_048_576
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(SIDECAR_DIR), **kwargs)
@@ -500,13 +530,75 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
             return
         super().log_message(format, *args)
 
+    def _is_allowed_origin(self) -> tuple[bool, str | None]:
+        """Validate `Origin` header to block cross-origin CSRF/CORS requests from external sites."""
+        origin = (self.headers.get("Origin") or "").strip()
+        if not origin:
+            return True, None
+        try:
+            parsed = urlparse(origin)
+        except ValueError:
+            return False, None
+        if parsed.scheme in ("http", "https") and parsed.hostname in (
+            "127.0.0.1",
+            "localhost",
+            "::1",
+        ):
+            return True, origin
+        if origin.startswith(("vscode-webview://", "sidecar://")):
+            return True, origin
+        return False, None
+
+    def _check_api_security(self, params: dict[str, list[str]]) -> bool:
+        """Enforce loopback Origin validation and constant-time `X-Sidecar-Token` verification."""
+        allowed, _ = self._is_allowed_origin()
+        if not allowed:
+            self._send_json(
+                {"status": "error", "error": "Forbidden cross-origin request."},
+                status=HTTPStatus.FORBIDDEN,
+            )
+            return False
+
+        expected_token = self.auth_token or _resolve_sidecar_token()
+        if expected_token:
+            provided_token = (
+                (self.headers.get("X-Sidecar-Token") or "").strip()
+                or (params.get("token") or [""])[0].strip()
+            )
+            if not provided_token or not hmac.compare_digest(provided_token, expected_token):
+                self._send_json(
+                    {
+                        "status": "error",
+                        "error": "Unauthorized: missing or invalid sidecar token.",
+                    },
+                    status=HTTPStatus.UNAUTHORIZED,
+                )
+                return False
+        return True
+
     def end_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        allowed, origin = self._is_allowed_origin()
+        if allowed and origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Sidecar-Token")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+        )
         super().end_headers()
 
     def do_OPTIONS(self) -> None:
+        allowed, _ = self._is_allowed_origin()
+        if not allowed:
+            self._send_json(
+                {"status": "error", "error": "Forbidden cross-origin request."},
+                status=HTTPStatus.FORBIDDEN,
+            )
+            return
         self.send_response(HTTPStatus.NO_CONTENT)
         self.end_headers()
 
@@ -528,9 +620,17 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
         self._send_bytes(body, content_type="application/json; charset=utf-8", status=status)
 
     def _read_json_body(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length", "0") or "0")
+        raw_len = self.headers.get("Content-Length", "0") or "0"
+        try:
+            length = int(raw_len)
+        except ValueError as exc:
+            raise ValueError("Invalid Content-Length header.") from exc
         if length <= 0:
             return {}
+        if length > self.MAX_BODY_BYTES:
+            raise ValueError(
+                f"Request body too large ({length} bytes; maximum is {self.MAX_BODY_BYTES} bytes)."
+            )
         raw = self.rfile.read(length).decode("utf-8")
         if not raw.strip():
             return {}
@@ -540,15 +640,13 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
         return data
 
     def _effective_workspace_dir(self, query_params: dict[str, list[str]]) -> str | None:
-        if query_params.get("workspace_dir"):
-            return query_params["workspace_dir"][0]
-        return self.workspace_dir
+        req_ws = (query_params.get("workspace_dir") or [None])[0]
+        return _resolve_allowed_workspace(req_ws, self.workspace_dir)
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path
         params = parse_qs(parsed.query)
-        ws = self._effective_workspace_dir(params)
         engine = (params.get("engine") or ["auto"])[0]
 
         if route == "/preload.js":
@@ -581,57 +679,88 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
             self._send_bytes(html.encode("utf-8"), content_type="text/html; charset=utf-8")
             return
 
-        if route == "/api/status":
-            data = asyncio.run(api_get_status(workspace_dir=ws, engine=engine))
-            self._send_json(data)
-            return
-
-        if route == "/api/notebooks":
-            query = (params.get("query") or [None])[0]
-            page_size = int((params.get("page_size") or ["50"])[0])
-            data = asyncio.run(
-                api_list_notebooks(
-                    engine=engine,
-                    query=query,
-                    page_size=page_size,
-                    workspace_dir=ws,
-                )
-            )
-            self._send_json(data)
-            return
-
-        if route == "/api/notebook":
-            notebook_id = (params.get("id") or params.get("notebook_id") or [None])[0]
-            data = asyncio.run(
-                api_get_notebook(
-                    notebook_id=notebook_id,
-                    engine=engine,
-                    workspace_dir=ws,
-                )
-            )
-            self._send_json(data)
-            return
-
         if route.startswith("/api/"):
+            if not self._check_api_security(params):
+                return
+            try:
+                ws = self._effective_workspace_dir(params)
+            except ValueError as exc:
+                self._send_json(
+                    {"status": "error", "error": str(exc)},
+                    status=HTTPStatus.BAD_REQUEST,
+                )
+                return
+
+            if route == "/api/status":
+                data = asyncio.run(api_get_status(workspace_dir=ws, engine=engine))
+                self._send_json(data)
+                return
+
+            if route == "/api/notebooks":
+                query = (params.get("query") or [None])[0]
+                raw_page_size = (params.get("page_size") or ["50"])[0]
+                try:
+                    page_size = int(raw_page_size)
+                except ValueError:
+                    self._send_json(
+                        {"status": "error", "error": f"Invalid page_size: {raw_page_size!r}"},
+                        status=HTTPStatus.BAD_REQUEST,
+                    )
+                    return
+                if page_size < 1 or page_size > 200:
+                    self._send_json(
+                        {"status": "error", "error": "page_size must be between 1 and 200."},
+                        status=HTTPStatus.BAD_REQUEST,
+                    )
+                    return
+                data = asyncio.run(
+                    api_list_notebooks(
+                        engine=engine,
+                        query=query,
+                        page_size=page_size,
+                        workspace_dir=ws,
+                    )
+                )
+                self._send_json(data)
+                return
+
+            if route == "/api/notebook":
+                notebook_id = (params.get("id") or params.get("notebook_id") or [None])[0]
+                data = asyncio.run(
+                    api_get_notebook(
+                        notebook_id=notebook_id,
+                        engine=engine,
+                        workspace_dir=ws,
+                    )
+                )
+                self._send_json(data)
+                return
+
             self._send_json(
                 {"status": "error", "error": f"Unknown API endpoint: {route}"},
                 status=HTTPStatus.NOT_FOUND,
             )
             return
 
-        super().do_GET()
+        self._send_json(
+            {"status": "error", "error": f"Not found: {route}"},
+            status=HTTPStatus.NOT_FOUND,
+        )
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path
         params = parse_qs(parsed.query)
-        ws = self._effective_workspace_dir(params)
+
+        if not self._check_api_security(params):
+            return
 
         try:
+            ws = self._effective_workspace_dir(params)
             payload = self._read_json_body()
         except Exception as exc:  # noqa: BLE001
             self._send_json(
-                {"status": "error", "error": f"Invalid JSON body: {exc}"},
+                {"status": "error", "error": f"Invalid request: {exc}"},
                 status=HTTPStatus.BAD_REQUEST,
             )
             return
@@ -666,7 +795,7 @@ class SidecarRequestHandler(SimpleHTTPRequestHandler):
                 {"status": "error", "error": f"Unknown API endpoint: {route}"},
                 status=HTTPStatus.NOT_FOUND,
             )
-        except ValueError as exc:
+        except (ValueError, FileNotFoundError) as exc:
             self._send_json(
                 {"status": "error", "error": str(exc)},
                 status=HTTPStatus.BAD_REQUEST,
@@ -682,6 +811,7 @@ def create_server(
     host: str = "127.0.0.1",
     port: int = 8765,
     workspace_dir: str | None = None,
+    auth_token: str | None = None,
 ) -> ThreadingHTTPServer:
     """Create a configured `ThreadingHTTPServer` instance (useful for testing and embedding)."""
 
@@ -689,6 +819,7 @@ def create_server(
         pass
 
     BoundSidecarHandler.workspace_dir = workspace_dir
+    BoundSidecarHandler.auth_token = auth_token
     return ThreadingHTTPServer((host, port), BoundSidecarHandler)
 
 
@@ -717,18 +848,18 @@ def _sidecar_data_dirs() -> list[Path]:
     return dirs
 
 
-def _write_server_info(host: str, port: int) -> list[Path]:
+def _write_server_info(
+    host: str,
+    port: int,
+    token: str | None = None,
+) -> list[Path]:
     """Write `server_info.json` so Antigravity 2 can discover the active sidecar port and token."""
-    token = (
-        os.environ.get("ANTIGRAVITY_SIDECAR_UI_TOKEN")
-        or os.environ.get("ANTIGRAVITY_SIDECAR_AUTH_TOKEN")
-        or os.environ.get("ANTIGRAVITY_SIDECAR_WEB_TOKEN")
-    )
+    effective_token = token or _resolve_sidecar_token()
     payload = json.dumps(
         {
             "host": host,
             "port": port,
-            "token": token,
+            "token": effective_token,
             "pid": os.getpid(),
         },
         indent=2,
@@ -749,10 +880,15 @@ def _write_server_info(host: str, port: int) -> list[Path]:
 def main() -> None:
     import signal
 
+    token = _resolve_sidecar_token()
+    if not token:
+        token = secrets.token_urlsafe(32)
+        os.environ["ANTIGRAVITY_SIDECAR_UI_TOKEN"] = token
+
     port = resolve_sidecar_port(default=8000)
-    server = create_server("127.0.0.1", port)
+    server = create_server("127.0.0.1", port, auth_token=token)
     actual_port = int(server.server_address[1])
-    info_files = _write_server_info("127.0.0.1", actual_port)
+    info_files = _write_server_info("127.0.0.1", actual_port, token=token)
 
     def _cleanup(*_args: Any) -> None:
         for p in info_files:

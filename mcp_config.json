@@ -4,7 +4,7 @@
       "command": "bash",
       "args": [
         "-c",
-        "for d in \"$(pwd)\" \"$HOME/.gemini/config/plugins/gemini-notebook\" \"$HOME/.gemini/extensions/gemini-notebook\"; do if [ -f \"$d/scripts/run_mcp.sh\" ]; then exec bash \"$d/scripts/run_mcp.sh\"; fi; done; exec agy-gemini-notebook-mcp"
+        "for d in \"$HOME/.gemini/config/plugins/gemini-notebook\" \"$HOME/.gemini/extensions/gemini-notebook\"; do if [ -f \"$d/scripts/run_mcp.sh\" ]; then exec bash \"$d/scripts/run_mcp.sh\"; fi; done; exec agy-gemini-notebook-mcp"
       ]
     }
   }
